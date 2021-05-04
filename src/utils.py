@@ -18,4 +18,4 @@ def gaussian(x, center, sigma):
             -5e-1 * ((x - center)/sigma)**2) / sigma
 
 def coulomb(r):
-    return torch.sqrt(r**2 + 1e-6)
+    return 1 / torch.sqrt(r**2 + 1e-6)
