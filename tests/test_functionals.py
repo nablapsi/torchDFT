@@ -4,14 +4,14 @@ sys.path.append('../src')
 
 import torch
 from functionals import *
-from utils import get_dx, coulomb, gaussian
+from utils import get_dx, soft_coulomb, gaussian
 
 class functionals_test(unittest.TestCase):
     def test_get_hartree_energy(self):
         grid = torch.arange(-5,5,0.1)
         density = gaussian(grid, 1, 1)
 
-        e1 = get_hartree_energy(density, grid, coulomb)
+        e1 = get_hartree_energy(density, grid, soft_coulomb)
 
         # Check against nested loop implementation:
         dx = get_dx(grid)
@@ -19,7 +19,7 @@ class functionals_test(unittest.TestCase):
         for n1, r1 in zip(density, grid):
             for n2, r2 in zip(density, grid):
                 disp = r1 - r2
-                e2 += n1 * n2 * coulomb(disp)
+                e2 += n1 * n2 * soft_coulomb(disp)
 
         e2 *= 5e-1 * dx * dx
         self.assertTrue(torch.isclose(e1, e2))
@@ -28,7 +28,7 @@ class functionals_test(unittest.TestCase):
         grid = torch.arange(-5,5,0.1)
         density = gaussian(grid, 1, 1)
 
-        p1 = get_hartree_potential(density, grid, coulomb)
+        p1 = get_hartree_potential(density, grid, soft_coulomb)
 
         # Check against nested loop implementation:
         dx = get_dx(grid)
@@ -36,7 +36,7 @@ class functionals_test(unittest.TestCase):
         for i, r in enumerate(grid):
             for n1, r1 in zip(density, grid):
                 disp = r1 - r
-                p2[i] += n1 * coulomb(disp)
+                p2[i] += n1 * soft_coulomb(disp)
 
         p2 *= 5e-1 * dx
         self.assertTrue(torch.allclose(p1, p2))
@@ -48,7 +48,7 @@ class functionals_test(unittest.TestCase):
         charges = torch.tensor([-1, 1])
         centers = torch.tensor([0, 2])
 
-        p1 = get_external_potential(charges, centers, grid, coulomb)
+        p1 = get_external_potential(charges, centers, grid, soft_coulomb)
 
         # Check against nested loop implementation:
         dx = get_dx(grid)
@@ -56,7 +56,7 @@ class functionals_test(unittest.TestCase):
 
         for i, r in enumerate(grid):
             for c1, r1 in zip(charges, centers):
-                p2[i] -= c1 * coulomb(r1 - r)
+                p2[i] -= c1 * soft_coulomb(r1 - r)
 
         self.assertTrue(torch.allclose(p1, p2))
 

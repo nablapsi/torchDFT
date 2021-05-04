@@ -95,4 +95,4 @@ def get_external_potential(charges, centers, grid, interaction_fn):
     r2 = torch.swapdims(torch.vstack((centers,)*grid_dim), 0, 1)
     c1 = torch.swapdims(torch.vstack((charges,)*grid_dim), 0, 1)
 
-    return -torch.sum(c1 * interaction_fn(r1 - r2), axis=0)
+    return - torch.sum(c1 * interaction_fn(r1 - r2), axis=0)

@@ -17,5 +17,5 @@ def gaussian(x, center, sigma):
     return 1e0 / torch.sqrt(torch.tensor(2 * math.pi)) * torch.exp(
             -5e-1 * ((x - center)/sigma)**2) / sigma
 
-def coulomb(r):
+def soft_coulomb(r):
     return 1 / torch.sqrt(r**2 + 1e-6)
