@@ -38,8 +38,24 @@ class functionals_test(unittest.TestCase):
                 disp = r1 - r
                 p2[i] += n1 * soft_coulomb(disp)
 
-        p2 *= 5e-1 * dx
+        p2 *= dx
         self.assertTrue(torch.allclose(p1, p2))
+
+    def test_hartree_potential_ener(self):
+        '''
+        The evaluated Hartree potential should be equal to the functional derivative
+        of the Hartree energy with respect to the density.
+        '''
+        grid = torch.arange(-5,5,0.1)
+        dx = get_dx(grid)
+        density = gaussian(grid, 1, 1)
+
+        pot = get_hartree_potential(density, grid, soft_coulomb)
+
+        density.requires_grad = True
+        ener = get_hartree_energy(density, grid, soft_coulomb)
+        ener.backward()
+        self.assertTrue(torch.allclose(pot, density.grad/dx))
 
     def test_get_external_potential(self):
         grid = torch.arange(-5,5,0.1)
@@ -59,6 +75,25 @@ class functionals_test(unittest.TestCase):
                 p2[i] -= c1 * soft_coulomb(r1 - r)
 
         self.assertTrue(torch.allclose(p1, p2))
+
+    def test_external_potential_ener(self):
+        '''
+        The evaluated external potential should be equal to the functional derivative
+        of the external potential energy with respect to the density.
+        '''
+        grid = torch.arange(-5,5,0.1)
+        dx = get_dx(grid)
+        density = gaussian(grid, 1, 1)
+
+        charges = torch.tensor([-1, 1])
+        centers = torch.tensor([0, 2])
+
+        pot = get_external_potential(charges, centers, grid, soft_coulomb)
+
+        density.requires_grad = True
+        ener = get_external_potential_energy(pot, density, grid)
+        ener.backward()
+        self.assertTrue(torch.allclose(pot, density.grad/dx))
 
 if __name__ == '__main__':
     unittest.main()

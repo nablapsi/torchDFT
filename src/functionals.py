@@ -50,9 +50,9 @@ def get_hartree_potential(density, grid, interaction_fn):
     r1 = torch.vstack((grid,)*grid_dim)
     r2 = torch.swapdims(r1, 0, 1)
 
-    return 5e-1 * torch.sum(n1 * interaction_fn(r1 - r2), axis=1) * dx
+    return torch.sum(n1 * interaction_fn(r1 - r2), axis=1) * dx
 
-def get_external_potential_energy(external_potential, density):
+def get_external_potential_energy(external_potential, density, grid):
     """
     Get external potential energy evaluated as:
     \int v_ext(r) n(r) dr
@@ -62,6 +62,7 @@ def get_external_potential_energy(external_potential, density):
           holding the external potential at each grid point.
         density: Float torch array of dimension (grid_dim,) holding the density
           at each spatial point.
+        grid: Float torch array of dimension (grid_dim,).
 
     Returns:
         Float. External potential energy.
