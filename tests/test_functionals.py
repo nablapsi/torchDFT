@@ -22,7 +22,7 @@ class functionals_test(unittest.TestCase):
                 e2 += n1 * n2 * coulomb(disp)
 
         e2 *= 5e-1 * dx * dx
-        self.assertAlmostEqual(float(e1), float(e2), places=5)
+        self.assertTrue(torch.isclose(e1, e2))
 
     def test_get_hartree_potential(self):
         grid = torch.arange(-5,5,0.1)
@@ -41,6 +41,24 @@ class functionals_test(unittest.TestCase):
         p2 *= 5e-1 * dx
         self.assertTrue(torch.allclose(p1, p2))
 
+    def test_get_external_potential(self):
+        grid = torch.arange(-5,5,0.1)
+        density = gaussian(grid, 1, 1)
+
+        charges = torch.tensor([-1, 1])
+        centers = torch.tensor([0, 2])
+
+        p1 = get_external_potential(charges, centers, grid, coulomb)
+
+        # Check against nested loop implementation:
+        dx = get_dx(grid)
+        p2 = torch.zeros(grid.size(0))
+
+        for i, r in enumerate(grid):
+            for c1, r1 in zip(charges, centers):
+                p2[i] -= c1 * coulomb(r1 - r)
+
+        self.assertTrue(torch.allclose(p1, p2))
 
 if __name__ == '__main__':
     unittest.main()
