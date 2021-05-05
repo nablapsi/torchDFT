@@ -1,10 +1,9 @@
 import sys
 import unittest
-sys.path.append('../src')
 
 import torch
-from functionals import *
-from utils import get_dx, soft_coulomb, gaussian
+from torchdft.functionals import *
+from torchdft.utils import get_dx, soft_coulomb, gaussian
 
 class functionals_test(unittest.TestCase):
     def test_get_hartree_energy(self):
