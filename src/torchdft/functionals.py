@@ -7,7 +7,7 @@ from .utils import get_dx
 
 
 def get_hartree_energy(density, grid, interaction_fn):
-    """
+    r"""
     Get Hartree energy evaluated as:
     0.5 \int \int n(r) n(r') interaction_function(r, r') dr dr'
 
@@ -34,7 +34,7 @@ def get_hartree_energy(density, grid, interaction_fn):
 
 
 def get_hartree_potential(density, grid, interaction_fn):
-    """
+    r"""
     Get Hartree potential evaluated as:
     0.5 \int n(r') interaction_function(r, r') dr'
 
@@ -60,7 +60,7 @@ def get_hartree_potential(density, grid, interaction_fn):
 
 
 def get_external_potential_energy(external_potential, density, grid):
-    """
+    r"""
     Get external potential energy evaluated as:
     \int v_ext(r) n(r) dr
 
@@ -80,7 +80,7 @@ def get_external_potential_energy(external_potential, density, grid):
 
 
 def get_external_potential(charges, centers, grid, interaction_fn):
-    """
+    r"""
     Get external potential evaluated as:
     \sum_{n=1}^N - Z_n \cdot interaction_function(r, r')
 

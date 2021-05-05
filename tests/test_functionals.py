@@ -11,7 +11,7 @@ from torchdft.functionals import (
 from torchdft.utils import gaussian, get_dx, soft_coulomb
 
 
-class functionals_test(unittest.TestCase):
+class FunctionalsTest(unittest.TestCase):
     def test_get_hartree_energy(self):
         grid = torch.arange(-5, 5, 0.1)
         density = gaussian(grid, 1, 1)
@@ -47,10 +47,10 @@ class functionals_test(unittest.TestCase):
         self.assertTrue(torch.allclose(p1, p2))
 
     def test_hartree_potential_ener(self):
-        '''
+        """
         The evaluated Hartree potential should be equal to the functional derivative
         of the Hartree energy with respect to the density.
-        '''
+        """
         grid = torch.arange(-5, 5, 0.1)
         dx = get_dx(grid)
         density = gaussian(grid, 1, 1)
@@ -80,10 +80,10 @@ class functionals_test(unittest.TestCase):
         self.assertTrue(torch.allclose(p1, p2))
 
     def test_external_potential_ener(self):
-        '''
+        """
         The evaluated external potential should be equal to the functional derivative
         of the external potential energy with respect to the density.
-        '''
+        """
         grid = torch.arange(-5, 5, 0.1)
         dx = get_dx(grid)
         density = gaussian(grid, 1, 1)
