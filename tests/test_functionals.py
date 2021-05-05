@@ -99,5 +99,5 @@ class FunctionalsTest(unittest.TestCase):
         self.assertTrue(torch.allclose(pot, density.grad / dx))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
