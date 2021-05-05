@@ -8,6 +8,8 @@ import torch
 
 def get_dx(grid):
     """
+    Get grid spacing.
+
     Given a grid as a 1D array returns the spacing between grid points.
     Args:
         grid: Float torch array of dimension (grid_dim,).
@@ -19,14 +21,25 @@ def get_dx(grid):
     return (torch.amax(grid) - torch.amin(grid)) / grid_dim
 
 
-def gaussian(x, center, sigma):
+def gaussian(x, mean, sigma):
+    """
+    Gaussian function.
+
+    Evaluates a gaussian function with mean = mean and std = sigma over
+    an array of positions x
+    """
     return (
         1e0
         / torch.sqrt(torch.tensor(2 * math.pi))
-        * torch.exp(-5e-1 * ((x - center) / sigma) ** 2)
+        * torch.exp(-5e-1 * ((x - mean) / sigma) ** 2)
         / sigma
     )
 
 
 def soft_coulomb(r):
+    """
+    Soft Coulomb.
+
+    Evaluates the soft coulomb interaction.
+    """
     return 1 / torch.sqrt(r ** 2 + 1e0)
