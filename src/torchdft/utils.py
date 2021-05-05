@@ -7,8 +7,7 @@ import torch
 
 
 def get_dx(grid):
-    """
-    Get grid spacing.
+    """Get grid spacing.
 
     Given a grid as a 1D array returns the spacing between grid points.
     Args:
@@ -22,8 +21,7 @@ def get_dx(grid):
 
 
 def gaussian(x, mean, sigma):
-    """
-    Gaussian function.
+    """Gaussian function.
 
     Evaluates a gaussian function with mean = mean and std = sigma over
     an array of positions x
@@ -37,8 +35,7 @@ def gaussian(x, mean, sigma):
 
 
 def soft_coulomb(r):
-    """
-    Soft Coulomb.
+    """Soft Coulomb.
 
     Evaluates the soft coulomb interaction.
     """
