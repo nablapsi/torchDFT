@@ -133,12 +133,14 @@ def get_external_potential(charges, centers, grid, interaction_fn):
 
 
 def get_XC_energy(density, grid, XC_energy_density):
+    """Evaluate XC energy."""
     dx = get_dx(grid)
 
     return torch.dot(XC_energy_density(density), density) * dx
 
 
 def get_XC_potential(density, grid, XC_energy_density):
+    """Evaluate XC potential."""
     density.requires_grad = True
     dx = get_dx(grid)
     _ = get_XC_energy(density, grid, XC_energy_density).backward()

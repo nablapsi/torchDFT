@@ -10,6 +10,7 @@ from torchdft import constants
 
 
 def exponential_coulomb_LDA_XC_energy_density(density):
+    """LDA XC energy for exponential coulomb interaction."""
     return get_exponential_coulomb_LDAX_energy_density(
         density
     ) + get_exponential_coulomb_LDAC_energy_density(density)
