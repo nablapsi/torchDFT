@@ -7,6 +7,7 @@ from torchdft.functionals import (
     get_external_potential_energy,
     get_hartree_energy,
     get_hartree_potential,
+    get_laplacian,
     get_XC_energy,
     get_XC_potential,
 )
@@ -15,6 +16,20 @@ from torchdft.xc_functionals import exponential_coulomb_LDA_XC_energy_density
 
 
 class FunctionalsTest(unittest.TestCase):
+    def test_get_laplacian(self):
+        grid_dim = 4
+        lap = get_laplacian(grid_dim)
+
+        true_lap = torch.Tensor(
+            [
+                [-2.5, 4.0 / 3.0, -1.0 / 12.0, 0],
+                [4.0 / 3.0, -2.5, 4.0 / 3.0, -1.0 / 12.0],
+                [-1.0 / 12.0, 4.0 / 3.0, -2.5, 4.0 / 3.0],
+                [0, -1.0 / 12.0, 4.0 / 3.0, -2.5],
+            ]
+        )
+        self.assertTrue(torch.allclose(lap, true_lap))
+
     def test_get_hartree_energy(self):
         grid = torch.arange(-5, 5, 0.1)
         density = gaussian(grid, 1, 1)

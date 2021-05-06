@@ -1,9 +1,28 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import torch
 
 from .utils import get_dx
+
+
+def get_laplacian(grid_dim):
+    """Finite difference approximation of Laplacian operator."""
+    return (
+        torch.diag_embed(-2.5 * torch.ones((grid_dim)))
+        + torch.diag_embed(4.0 / 3.0 * torch.ones(grid_dim - 1), offset=1)
+        + torch.diag_embed(4.0 / 3.0 * torch.ones(grid_dim - 1), offset=-1)
+        + torch.diag_embed(-1.0 / 12.0 * torch.ones(grid_dim - 2), offset=2)
+        + torch.diag_embed(-1.0 / 12.0 * torch.ones(grid_dim - 2), offset=-2)
+    )
+
+
+def kinetic_matrix(grid):
+    """Kinetic operator matrix."""
+    grid_dim = grid.size(0)
+    dx = get_dx(grid)
+    return -5e-1 * get_laplacian(grid_dim) / (dx * dx)
 
 
 def get_hartree_energy(density, grid, interaction_fn):
