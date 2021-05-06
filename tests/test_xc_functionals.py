@@ -2,7 +2,6 @@ import unittest
 
 import torch
 
-from torchdft.utils import gaussian, get_dx
 from torchdft.xc_functionals import (
     get_exponential_coulomb_LDAC_energy_density,
     get_exponential_coulomb_LDAX_energy_density,

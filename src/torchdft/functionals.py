@@ -18,7 +18,7 @@ def get_laplacian(grid_dim):
     )
 
 
-def kinetic_matrix(grid):
+def get_kinetic_matrix(grid):
     """Kinetic operator matrix."""
     grid_dim = grid.size(0)
     dx = get_dx(grid)
