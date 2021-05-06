@@ -5,6 +5,8 @@ import math
 
 import torch
 
+from torchdft import constants
+
 
 def get_dx(grid):
     """Get grid spacing.
@@ -40,3 +42,11 @@ def soft_coulomb(r):
     Evaluates the soft coulomb interaction.
     """
     return 1 / torch.sqrt(r ** 2 + 1e0)
+
+
+def exp_coulomb(r):
+    """Exponential coulomb.
+
+    Evaluates the exponential coulomb interaction.
+    """
+    return constants.A * torch.exp(-constants.kappa * torch.abs(r))
