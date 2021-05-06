@@ -9,7 +9,13 @@ import torch
 from torchdft import constants
 
 
-def get_exponential_coulomb_LDAX_potential(
+def exponential_coulomb_LDA_XC_energy_density(density):
+    return get_exponential_coulomb_LDAX_energy_density(
+        density
+    ) + get_exponential_coulomb_LDAC_energy_density(density)
+
+
+def get_exponential_coulomb_LDAX_energy_density(
     density, A=constants.A, kappa=constants.kappa, thres=1e-15
 ):
     """Evaluate exchange potential.
@@ -26,7 +32,7 @@ def get_exponential_coulomb_LDAX_potential(
     )
 
 
-def get_exponential_coulomb_LDAC_potential(
+def get_exponential_coulomb_LDAC_energy_density(
     density, A=constants.A, kappa=constants.kappa, thres=1e-15
 ):
     """Evaluate correlation potential.

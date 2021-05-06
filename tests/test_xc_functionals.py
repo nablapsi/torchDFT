@@ -2,17 +2,18 @@ import unittest
 
 import torch
 
+from torchdft.utils import gaussian, get_dx
 from torchdft.xc_functionals import (
-    get_exponential_coulomb_LDAC_potential,
-    get_exponential_coulomb_LDAX_potential,
+    get_exponential_coulomb_LDAC_energy_density,
+    get_exponential_coulomb_LDAX_energy_density,
 )
 
 
 class XcFunctionalsTest(unittest.TestCase):
-    def test_get_exponential_coulomb_LDAX_potential(self):
+    def test_get_exponential_coulomb_LDAX_energy_density(self):
         density = torch.Tensor([0.0, 1e-15, 1e-10, 1.0, 5.0])
 
-        p1 = get_exponential_coulomb_LDAX_potential(density)
+        p1 = get_exponential_coulomb_LDAX_energy_density(density)
         p2 = torch.Tensor(
             [
                 0.0,
@@ -24,10 +25,10 @@ class XcFunctionalsTest(unittest.TestCase):
         )
         self.assertTrue(torch.allclose(p1, p2))
 
-    def test_get_exponential_coulomb_LDAC_potential(self):
+    def test_get_exponential_coulomb_LDAC_energy_density(self):
         density = torch.Tensor([0.0, 1e-15, 1e-10, 1.0, 5.0])
 
-        p1 = get_exponential_coulomb_LDAC_potential(density)
+        p1 = get_exponential_coulomb_LDAC_energy_density(density)
         p2 = torch.Tensor(
             [
                 -0.0,

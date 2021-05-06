@@ -111,3 +111,17 @@ def get_external_potential(charges, centers, grid, interaction_fn):
     c1 = torch.swapdims(torch.vstack((charges,) * grid_dim), 0, 1)
 
     return -torch.sum(c1 * interaction_fn(r1 - r2), axis=0)
+
+
+def get_XC_energy(density, grid, XC_energy_density):
+    dx = get_dx(grid)
+
+    return torch.dot(XC_energy_density(density), density) * dx
+
+
+def get_XC_potential(density, grid, XC_energy_density):
+    density.requires_grad = True
+    dx = get_dx(grid)
+    _ = get_XC_energy(density, grid, XC_energy_density).backward()
+
+    return density.grad / dx

@@ -7,8 +7,11 @@ from torchdft.functionals import (
     get_external_potential_energy,
     get_hartree_energy,
     get_hartree_potential,
+    get_XC_energy,
+    get_XC_potential,
 )
 from torchdft.utils import gaussian, get_dx, soft_coulomb
+from torchdft.xc_functionals import exponential_coulomb_LDA_XC_energy_density
 
 
 class FunctionalsTest(unittest.TestCase):
@@ -95,6 +98,26 @@ class FunctionalsTest(unittest.TestCase):
 
         density.requires_grad = True
         ener = get_external_potential_energy(pot, density, grid)
+        ener.backward()
+        self.assertTrue(torch.allclose(pot, density.grad / dx))
+
+    def test_XC_potential_ener(self):
+        """
+        The evaluated XC potential should be equal to the functional derivative
+        of the XC energy with respect to the density.
+        """
+        grid = torch.arange(-5, 5, 0.1)
+        dx = get_dx(grid)
+        density = gaussian(grid, 1, 1)
+
+        pot = get_XC_potential(density, grid, exponential_coulomb_LDA_XC_energy_density)
+
+        density.requires_grad = True
+
+        # NOTE:_It is neccessary to reset the gradients since they have been
+        # filled in the evaluation of the XC potential.
+        density.grad = None
+        ener = get_XC_energy(density, grid, exponential_coulomb_LDA_XC_energy_density)
         ener.backward()
         self.assertTrue(torch.allclose(pot, density.grad / dx))
 
