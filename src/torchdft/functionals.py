@@ -141,6 +141,15 @@ def get_XC_energy(density, grid, XC_energy_density):
 
 def get_XC_potential(density, grid, XC_energy_density):
     """Evaluate XC potential."""
+    # This copy is needed since it will load gradients on density Tensor otherwise.
+    cdensity = density.clone().detach()
+    cdensity.requires_grad = True
+    cdensity.grad = None
+    dx = get_dx(grid)
+    _ = get_XC_energy(cdensity, grid, XC_energy_density).backward()
+
+    return cdensity.grad / dx
+
     density.requires_grad = True
     dx = get_dx(grid)
     _ = get_XC_energy(density, grid, XC_energy_density).backward()

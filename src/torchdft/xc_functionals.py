@@ -34,7 +34,7 @@ def get_exponential_coulomb_LDAX_energy_density(
 
 
 def get_exponential_coulomb_LDAC_energy_density(
-    density, A=constants.A, kappa=constants.kappa, thres=1e-15
+    density, A=constants.A, kappa=constants.kappa
 ):
     """Evaluate correlation potential.
 
