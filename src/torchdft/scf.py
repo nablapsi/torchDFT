@@ -53,7 +53,7 @@ def get_total_eigen_ener(nelectrons, eigener):
     return torch.sum(occ)
 
 
-def get_total_energy(
+def get_electronic_energy(
     system, eigen_ener, veff, grid, density, interaction_fn, XC_energy_density
 ):
     """Evaluate the total energy of the system."""
@@ -97,8 +97,10 @@ def solve_ks(
     """Given a system, evaluates its energy solvig the KS equations."""
 
     # Get external potential.
-    system.vext = get_external_potential(
-        system.charges, system.centers, grid, interaction_fn
+    system = system._replace(
+        vext=get_external_potential(
+            system.charges, system.centers, grid, interaction_fn
+        )
     )
 
     # First iteration will use vext as veff since we don't have any density.
@@ -107,7 +109,9 @@ def solve_ks(
 
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Absolute difference")
+
     for it in range(1, max_iterations + 1):
+        # TODO: Check if this copy is absolutely neccessary.
         old_density = new_density.clone().detach()
         old_ener = new_ener
 
@@ -115,7 +119,7 @@ def solve_ks(
             system.vext, old_density, grid, interaction_fn, XC_energy_density
         )
         density, total_eigener = ks_iteration(system.nelectrons, veff, grid)
-        new_ener = get_total_energy(
+        new_ener = get_electronic_energy(
             system,
             total_eigener,
             veff,
@@ -124,8 +128,9 @@ def solve_ks(
             interaction_fn,
             XC_energy_density,
         )
+        system = system._replace(density=density)
+        system = system._replace(energy=new_ener)
 
-        old_density.requires_grad = False
         new_density = old_density + alpha * (density - old_density)
 
         if print_iterations:
@@ -135,8 +140,9 @@ def solve_ks(
             )
             # it, old_ener, total_ener)
 
-        # TODO: Add some kind of convergence criteria so not all iterations are evaluated.
+        # TODO: Add some kind of convergence criteria so not all
+        # iterations are evaluated.
         # if torch.abs(old_ener - total_ener) < 1e-5:
         #    break
 
-    return new_density, new_ener
+    return system

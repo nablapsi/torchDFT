@@ -2,10 +2,16 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
+from collections import namedtuple
 
 import torch
 
 from torchdft import constants
+
+# TODO: Find better way to express the system.
+System = namedtuple(
+    "System", ["nelectrons", "charges", "centers", "vext", "density", "energy"]
+)
 
 
 def get_dx(grid):
