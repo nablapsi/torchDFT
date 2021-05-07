@@ -19,7 +19,7 @@ def get_dx(grid):
         Float.
     """
     grid_dim = grid.size(0)
-    return (torch.amax(grid) - torch.amin(grid)) / grid_dim
+    return (torch.amax(grid) - torch.amin(grid)) / (grid_dim - 1)
 
 
 def gaussian(x, mean, sigma):
