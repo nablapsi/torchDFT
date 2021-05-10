@@ -36,6 +36,7 @@ def solve_ks(
     interaction_fn=exp_coulomb,
     XC_energy_density=exponential_coulomb_LDA_XC_energy_density,
     max_iterations=100,
+    density_threshold=1e-4,
     print_iterations=False,
 ):
     """Given a system, evaluates its energy solvig the KS equations."""
@@ -67,19 +68,12 @@ def solve_ks(
         new_ener = total_eigener + E_xc - ((v_H / 2 + v_xc) * old_density).sum() * dx
         system = system._replace(density=density)
         system = system._replace(energy=new_ener)
-
-        new_density = old_density + alpha * (density - old_density)
-
         if print_iterations:
             print(
                 "%3i   %10.7f   %10.7f   %3.4e"
                 % (it, old_ener, new_ener, torch.abs(old_ener - new_ener))
             )
-            # it, old_ener, total_ener)
-
-        # TODO: Add some kind of convergence criteria so not all
-        # iterations are evaluated.
-        # if torch.abs(old_ener - total_ener) < 1e-5:
-        #    break
-
+        if (density - old_density).abs().sum() * dx < density_threshold:
+            break
+        new_density = old_density + alpha * (density - old_density)
     return system
