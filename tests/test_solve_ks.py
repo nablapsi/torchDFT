@@ -18,5 +18,5 @@ def test_h2():
         energy=None,
     )
     grid = torch.arange(-10, 10, 0.1)
-    system = solve_ks(H2, grid)
-    assert_allclose(system.energy, -2.0)
+    density, energy = solve_ks(H2, grid)
+    assert_allclose(energy, -2.0)
