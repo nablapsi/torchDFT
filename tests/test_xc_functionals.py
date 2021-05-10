@@ -9,10 +9,10 @@ from torchdft.xc_functionals import (
 
 class TestXcFunctionals:
     def test_get_exponential_coulomb_LDAX_energy_density(self):
-        density = torch.Tensor([0.0, 1e-15, 1e-10, 1.0, 5.0])
+        density = torch.tensor([0.0, 1e-15, 1e-10, 1.0, 5.0])
 
         p1 = get_exponential_coulomb_LDAX_energy_density(density)
-        p2 = torch.Tensor(
+        p2 = torch.tensor(
             [
                 0.0,
                 -2.5554081717750003e-15,
@@ -24,10 +24,10 @@ class TestXcFunctionals:
         assert_allclose(p1, p2)
 
     def test_get_exponential_coulomb_LDAC_energy_density(self):
-        density = torch.Tensor([0.0, 1e-15, 1e-10, 1.0, 5.0])
+        density = torch.tensor([0.0, 1e-15, 1e-10, 1.0, 5.0])
 
         p1 = get_exponential_coulomb_LDAC_energy_density(density)
-        p2 = torch.Tensor(
+        p2 = torch.tensor(
             [
                 -0.0,
                 -1.2777041412333279e-15,

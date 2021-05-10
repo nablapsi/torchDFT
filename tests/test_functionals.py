@@ -19,7 +19,7 @@ class TestFunctionals:
         grid_dim = 4
         lap = get_laplacian(grid_dim)
 
-        true_lap = torch.Tensor(
+        true_lap = torch.tensor(
             [
                 [-2.5, 4.0 / 3.0, -1.0 / 12.0, 0],
                 [4.0 / 3.0, -2.5, 4.0 / 3.0, -1.0 / 12.0],

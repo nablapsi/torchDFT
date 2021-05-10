@@ -22,7 +22,7 @@ class TestSCF:
 
         density = gaussian(grid, 0.0, 1.0)
 
-        vext = torch.Tensor(
+        vext = torch.tensor(
             [
                 -0.1317,
                 -0.2003,
@@ -53,7 +53,7 @@ class TestSCF:
 
     def test_get_hamiltonian_matrix(self):
         grid = torch.arange(-5, 5, 1)
-        vext = torch.Tensor(
+        vext = torch.tensor(
             [
                 -0.1317,
                 -0.2003,
@@ -78,15 +78,15 @@ class TestSCF:
     def test_get_density_from_wf(self):
         nelectrons = 4
         grid = torch.linspace(-2, 2, 5)
-        wf = torch.Tensor([[0.0, 0.0, 1.0, 0.0, 0.0], [-1, 0.0, 0.0, 1.0, 0.0]])
+        wf = torch.tensor([[0.0, 0.0, 1.0, 0.0, 0.0], [-1, 0.0, 0.0, 1.0, 0.0]])
 
         assert_allclose(
             get_density_from_wf(nelectrons, grid, torch.swapdims(wf, 0, 1)),
-            torch.Tensor([1.0, 0.0, 2.0, 1.0, 0.0]),
+            torch.tensor([1.0, 0.0, 2.0, 1.0, 0.0]),
         )
 
     def test_get_total_eigen_ener(self):
         nelectrons = 4
-        eigener = torch.Tensor([1.0, 2.0, 3.0, 4.0])
+        eigener = torch.tensor([1.0, 2.0, 3.0, 4.0])
 
         assert_allclose(get_total_eigen_ener(nelectrons, eigener), torch.tensor(6.0))
