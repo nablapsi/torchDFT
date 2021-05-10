@@ -1,6 +1,5 @@
-import unittest
-
 import torch
+from torch.testing import assert_allclose
 
 from torchdft.xc_functionals import (
     get_exponential_coulomb_LDAC_energy_density,
@@ -8,7 +7,7 @@ from torchdft.xc_functionals import (
 )
 
 
-class XcFunctionalsTest(unittest.TestCase):
+class TestXcFunctionals:
     def test_get_exponential_coulomb_LDAX_energy_density(self):
         density = torch.Tensor([0.0, 1e-15, 1e-10, 1.0, 5.0])
 
@@ -22,7 +21,7 @@ class XcFunctionalsTest(unittest.TestCase):
                 -0.49356793671356225,
             ]
         )
-        self.assertTrue(torch.allclose(p1, p2))
+        assert_allclose(p1, p2)
 
     def test_get_exponential_coulomb_LDAC_energy_density(self):
         density = torch.Tensor([0.0, 1e-15, 1e-10, 1.0, 5.0])
@@ -37,4 +36,4 @@ class XcFunctionalsTest(unittest.TestCase):
                 -0.0005034570738508356,
             ]
         )
-        self.assertTrue(torch.allclose(p1, p2))
+        assert_allclose(p1, p2)

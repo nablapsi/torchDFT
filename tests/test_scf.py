@@ -1,6 +1,5 @@
-import unittest
-
 import torch
+from torch.testing import assert_allclose
 
 from torchdft.functionals import (
     get_hartree_potential,
@@ -17,7 +16,7 @@ from torchdft.utils import exp_coulomb, gaussian
 from torchdft.xc_functionals import exponential_coulomb_LDA_XC_energy_density
 
 
-class ScfTest(unittest.TestCase):
+class TestSCF:
     def test_get_effective_potential(self):
         grid = torch.arange(-5, 5, 1)
 
@@ -41,17 +40,15 @@ class ScfTest(unittest.TestCase):
         vXC = get_XC_potential(density, grid, exponential_coulomb_LDA_XC_energy_density)
         v = vext + vH + vXC
 
-        self.assertTrue(
-            torch.allclose(
-                get_effective_potential(
-                    vext,
-                    density,
-                    grid,
-                    exp_coulomb,
-                    exponential_coulomb_LDA_XC_energy_density,
-                ),
-                v,
-            )
+        assert_allclose(
+            get_effective_potential(
+                vext,
+                density,
+                grid,
+                exp_coulomb,
+                exponential_coulomb_LDA_XC_energy_density,
+            ),
+            v,
         )
 
     def test_get_hamiltonian_matrix(self):
@@ -76,30 +73,20 @@ class ScfTest(unittest.TestCase):
         for i in range(Htrue.size(0)):
             Htrue[i, i] += vext[i]
 
-        self.assertTrue(torch.allclose(H, Htrue))
+        assert_allclose(H, Htrue)
 
     def test_get_density_from_wf(self):
         nelectrons = 4
         grid = torch.linspace(-2, 2, 5)
         wf = torch.Tensor([[0.0, 0.0, 1.0, 0.0, 0.0], [-1, 0.0, 0.0, 1.0, 0.0]])
 
-        self.assertTrue(
-            torch.allclose(
-                get_density_from_wf(nelectrons, grid, torch.swapdims(wf, 0, 1)),
-                torch.Tensor([1.0, 0.0, 2.0, 1.0, 0.0]),
-            )
+        assert_allclose(
+            get_density_from_wf(nelectrons, grid, torch.swapdims(wf, 0, 1)),
+            torch.Tensor([1.0, 0.0, 2.0, 1.0, 0.0]),
         )
 
     def test_get_total_eigen_ener(self):
         nelectrons = 4
         eigener = torch.Tensor([1.0, 2.0, 3.0, 4.0])
 
-        self.assertTrue(
-            torch.isclose(
-                get_total_eigen_ener(nelectrons, eigener), torch.Tensor([6.0])
-            )
-        )
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert_allclose(get_total_eigen_ener(nelectrons, eigener), torch.tensor(6.0))

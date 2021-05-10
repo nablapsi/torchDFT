@@ -1,6 +1,5 @@
-import unittest
-
 import torch
+from torch.testing import assert_allclose
 
 from torchdft.functionals import (
     get_external_potential,
@@ -15,7 +14,7 @@ from torchdft.utils import gaussian, get_dx, soft_coulomb
 from torchdft.xc_functionals import exponential_coulomb_LDA_XC_energy_density
 
 
-class FunctionalsTest(unittest.TestCase):
+class TestFunctionals:
     def test_get_laplacian(self):
         grid_dim = 4
         lap = get_laplacian(grid_dim)
@@ -28,7 +27,7 @@ class FunctionalsTest(unittest.TestCase):
                 [0, -1.0 / 12.0, 4.0 / 3.0, -2.5],
             ]
         )
-        self.assertTrue(torch.allclose(lap, true_lap))
+        assert_allclose(lap, true_lap)
 
     def test_get_hartree_energy(self):
         grid = torch.arange(-5, 5, 0.1)
@@ -45,7 +44,7 @@ class FunctionalsTest(unittest.TestCase):
                 e2 += n1 * n2 * soft_coulomb(disp)
 
         e2 *= 5e-1 * dx * dx
-        self.assertTrue(torch.isclose(e1, e2))
+        assert_allclose(e1, e2)
 
     def test_get_hartree_potential(self):
         grid = torch.arange(-5, 5, 0.1)
@@ -62,7 +61,7 @@ class FunctionalsTest(unittest.TestCase):
                 p2[i] += n1 * soft_coulomb(disp)
 
         p2 *= dx
-        self.assertTrue(torch.allclose(p1, p2))
+        assert_allclose(p1, p2)
 
     def test_hartree_potential_ener(self):
         """
@@ -78,7 +77,7 @@ class FunctionalsTest(unittest.TestCase):
         density.requires_grad = True
         ener = get_hartree_energy(density, grid, soft_coulomb)
         ener.backward()
-        self.assertTrue(torch.allclose(pot, density.grad / dx))
+        assert_allclose(pot, density.grad / dx)
 
     def test_get_external_potential(self):
         grid = torch.arange(-5, 5, 0.1)
@@ -95,7 +94,7 @@ class FunctionalsTest(unittest.TestCase):
             for c1, r1 in zip(charges, centers):
                 p2[i] -= c1 * soft_coulomb(r1 - r)
 
-        self.assertTrue(torch.allclose(p1, p2))
+        assert_allclose(p1, p2)
 
     def test_external_potential_ener(self):
         """
@@ -114,7 +113,7 @@ class FunctionalsTest(unittest.TestCase):
         density.requires_grad = True
         ener = get_external_potential_energy(pot, density, grid)
         ener.backward()
-        self.assertTrue(torch.allclose(pot, density.grad / dx))
+        assert_allclose(pot, density.grad / dx)
 
     def test_XC_potential_ener(self):
         """
@@ -134,8 +133,4 @@ class FunctionalsTest(unittest.TestCase):
         density.grad = None
         ener = get_XC_energy(density, grid, exponential_coulomb_LDA_XC_energy_density)
         ener.backward()
-        self.assertTrue(torch.allclose(pot, density.grad / dx))
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert_allclose(pot, density.grad / dx)
