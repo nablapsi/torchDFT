@@ -149,9 +149,3 @@ def get_XC_potential(density, grid, XC_energy_density):
     _ = get_XC_energy(cdensity, grid, XC_energy_density).backward()
 
     return cdensity.grad / dx
-
-    density.requires_grad = True
-    dx = get_dx(grid)
-    _ = get_XC_energy(density, grid, XC_energy_density).backward()
-
-    return density.grad / dx
