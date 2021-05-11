@@ -49,7 +49,7 @@ def get_exponential_coulomb_LDAC_energy_density(
     sigma = -1.48334
     nu = 1.0
 
-    finite_y = torch.where(y == 0.0, torch.ones(1), y)
+    finite_y = torch.where(y == 0.0, density.new_tensor(1), y)
     out = (
         -A
         * finite_y

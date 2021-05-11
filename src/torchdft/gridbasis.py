@@ -15,7 +15,7 @@ class GridBasis:
         self.dx = get_dx(grid)
 
     def get_core_integrals(self):
-        S = torch.full((len(self.grid),), self.dx).diag_embed()
+        S = torch.full((len(self.grid),), self.dx, device=self.grid.device).diag_embed()
         T = self.dx * get_kinetic_matrix(self.grid)
         v_ext = self.dx * get_external_potential(
             self.system.charges, self.system.centers, self.grid, self.interaction_fn
@@ -42,14 +42,14 @@ def get_gradient(grid_dim):
     )
 
 
-def get_laplacian(grid_dim):
+def get_laplacian(grid_dim, device=None):
     """Finite difference approximation of Laplacian operator."""
     return (
-        (-2.5 * torch.ones((grid_dim))).diag_embed()
-        + (4.0 / 3.0 * torch.ones(grid_dim - 1)).diag_embed(offset=1)
-        + (4.0 / 3.0 * torch.ones(grid_dim - 1)).diag_embed(offset=-1)
-        + (-1.0 / 12.0 * torch.ones(grid_dim - 2)).diag_embed(offset=2)
-        + (-1.0 / 12.0 * torch.ones(grid_dim - 2)).diag_embed(offset=-2)
+        (-2.5 * torch.ones(grid_dim, device=device)).diag_embed()
+        + (4.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=1)
+        + (4.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=-1)
+        + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=2)
+        + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=-2)
     )
 
 
@@ -57,7 +57,7 @@ def get_kinetic_matrix(grid):
     """Kinetic operator matrix."""
     grid_dim = grid.size(0)
     dx = get_dx(grid)
-    return -5e-1 * get_laplacian(grid_dim) / (dx * dx)
+    return -5e-1 * get_laplacian(grid_dim, device=grid.device) / (dx * dx)
 
 
 def get_hartree_energy(density, grid, interaction_fn):
