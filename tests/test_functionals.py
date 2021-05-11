@@ -4,6 +4,7 @@ from torch.testing import assert_allclose
 from torchdft.functionals import (
     get_external_potential,
     get_external_potential_energy,
+    get_gradient,
     get_hartree_energy,
     get_hartree_potential,
     get_laplacian,
@@ -15,6 +16,20 @@ from torchdft.xc_functionals import exponential_coulomb_LDA_XC_energy_density
 
 
 class TestFunctionals:
+    def test_get_gradient(self):
+        grid_dim = 4
+        grad = get_gradient(grid_dim)
+
+        true_grad = torch.tensor(
+            [
+                [0.0, 2.0 / 3.0, -1.0 / 12.0, 0],
+                [-2.0 / 3.0, 0.0, 2.0 / 3.0, -1.0 / 12.0],
+                [1.0 / 12.0, -2.0 / 3.0, 0.0, 2.0 / 3.0],
+                [0, 1.0 / 12.0, -2.0 / 3.0, 0.0],
+            ]
+        )
+        assert_allclose(grad, true_grad)
+
     def test_get_laplacian(self):
         grid_dim = 4
         lap = get_laplacian(grid_dim)

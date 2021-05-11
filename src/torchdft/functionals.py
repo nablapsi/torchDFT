@@ -7,14 +7,24 @@ import torch
 from .utils import get_dx
 
 
+def get_gradient(grid_dim):
+    """Finite difference approximation of gradient operator."""
+    return (
+        (2.0 / 3.0 * torch.ones(grid_dim - 1)).diag_embed(offset=1)
+        + (-2.0 / 3.0 * torch.ones(grid_dim - 1)).diag_embed(offset=-1)
+        + (-1.0 / 12.0 * torch.ones(grid_dim - 2)).diag_embed(offset=2)
+        + (1.0 / 12.0 * torch.ones(grid_dim - 2)).diag_embed(offset=-2)
+    )
+
+
 def get_laplacian(grid_dim):
     """Finite difference approximation of Laplacian operator."""
     return (
-        torch.diag_embed(-2.5 * torch.ones((grid_dim)))
-        + torch.diag_embed(4.0 / 3.0 * torch.ones(grid_dim - 1), offset=1)
-        + torch.diag_embed(4.0 / 3.0 * torch.ones(grid_dim - 1), offset=-1)
-        + torch.diag_embed(-1.0 / 12.0 * torch.ones(grid_dim - 2), offset=2)
-        + torch.diag_embed(-1.0 / 12.0 * torch.ones(grid_dim - 2), offset=-2)
+        (-2.5 * torch.ones((grid_dim))).diag_embed()
+        + (4.0 / 3.0 * torch.ones(grid_dim - 1)).diag_embed(offset=1)
+        + (4.0 / 3.0 * torch.ones(grid_dim - 1)).diag_embed(offset=-1)
+        + (-1.0 / 12.0 * torch.ones(grid_dim - 2)).diag_embed(offset=2)
+        + (-1.0 / 12.0 * torch.ones(grid_dim - 2)).diag_embed(offset=-2)
     )
 
 
