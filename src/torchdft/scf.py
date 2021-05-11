@@ -1,8 +1,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import torch
-
 from .utils import GeneralizedDiagonalizer
 from .xc_functionals import exponential_coulomb_LDA_XC_energy_density
 
@@ -11,11 +9,13 @@ __all__ = ["solve_ks"]
 
 def ks_iteration(F, S, n_electrons):
     n_occ = n_electrons // 2 + n_electrons % 2
-    epsilon, phi = S.eigh(F)
-    epsilon, phi = epsilon[:n_occ], phi[:, :n_occ]
-    density = (torch.column_stack((phi ** 2,) * 2)[:, :n_electrons]).sum(dim=-1)
-    energy_orb = ((torch.column_stack((epsilon,) * 2)[:n_electrons])).sum()
-    return density, energy_orb
+    occ = F.new_ones(n_occ)  # orbital occupation numbers
+    occ[: n_electrons // 2] += 1
+    epsilon, C = S.eigh(F)
+    epsilon, C = epsilon[:n_occ], C[:, :n_occ]
+    P = (C * occ) @ C.t()
+    energy_orb = (epsilon * occ).sum()
+    return P, energy_orb
 
 
 def solve_ks(
@@ -24,29 +24,28 @@ def solve_ks(
     alpha=0.5,
     XC_energy_density=exponential_coulomb_LDA_XC_energy_density,
     max_iterations=100,
-    density_threshold=1e-4,
+    dm_threshold=1e-3,
     print_iterations=False,
 ):
     """Given a system, evaluates its energy by solving the KS equations."""
-    S, T, v_ext = basis.get_core_integrals()
+    S, T, V_ext = basis.get_core_integrals()
     S = GeneralizedDiagonalizer(S)
-    F = T + v_ext.diag_embed()
-    density_in, energy_prev = ks_iteration(F, S, system.nelectrons)
+    F = T + V_ext
+    P_in, energy_prev = ks_iteration(F, S, system.nelectrons)
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Absolute difference")
     for i in range(max_iterations):
-        v_H, v_xc, E_xc = basis.get_int_integrals(density_in, XC_energy_density)
-        v_eff = v_ext + v_H + v_xc
-        F = T + v_eff.diag_embed()
-        density_out, energy_orb = ks_iteration(F, S, system.nelectrons)
-        energy = energy_orb + E_xc - ((v_H / 2 + v_xc) * density_in).sum()
+        V_H, V_xc, E_xc = basis.get_int_integrals(P_in, XC_energy_density)
+        F = T + V_ext + V_H + V_xc
+        P_out, energy_orb = ks_iteration(F, S, system.nelectrons)
+        energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum()
         if print_iterations:
             print(
                 "%3i   %10.7f   %10.7f   %3.4e"
                 % (i, energy_prev, energy, (energy - energy_prev).abs())
             )
-        if basis.integrate((density_out - density_in).abs()) < density_threshold:
+        if (P_out - P_in).norm() < dm_threshold:
             break
-        density_in = density_in + alpha * (density_out - density_in)
+        P_in = P_in + alpha * (P_out - P_in)
         energy_prev = energy
-    return density_out, energy
+    return P_out, energy

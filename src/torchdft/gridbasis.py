@@ -19,19 +19,17 @@ class GridBasis:
     def get_core_integrals(self):
         S = torch.full((len(self.grid),), self.dx, device=self.grid.device).diag_embed()
         T = self.dx * get_kinetic_matrix(self.grid)
-        v_ext = self.dx * get_external_potential(
+        v_ext = get_external_potential(
             self.system.charges, self.system.centers, self.grid, self.interaction_fn
         )
-        return S, T, v_ext
+        return S, T, self.dx * v_ext.diag_embed()
 
-    def get_int_integrals(self, density, XC_energy_density):
-        v_H = self.dx * get_hartree_potential(density, self.grid, self.interaction_fn)
+    def get_int_integrals(self, P, XC_energy_density):
+        density = P.diag()
+        v_H = get_hartree_potential(density, self.grid, self.interaction_fn)
         E_xc = get_XC_energy(density, self.grid, XC_energy_density)
-        v_xc = self.dx * get_XC_potential(density, self.grid, XC_energy_density)
-        return v_H, v_xc, E_xc
-
-    def integrate(self, f):
-        return f.sum() * self.dx
+        v_xc = get_XC_potential(density, self.grid, XC_energy_density)
+        return self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc
 
 
 def get_gradient(grid_dim):
