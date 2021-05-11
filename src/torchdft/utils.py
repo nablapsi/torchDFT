@@ -9,9 +9,7 @@ import torch
 from torchdft import constants
 
 # TODO: Find better way to express the system.
-System = namedtuple(
-    "System", ["nelectrons", "charges", "centers"]
-)
+System = namedtuple("System", ["nelectrons", "charges", "centers"])
 
 
 def get_dx(grid):
