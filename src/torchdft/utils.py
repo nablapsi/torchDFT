@@ -10,7 +10,7 @@ from torchdft import constants
 
 # TODO: Find better way to express the system.
 System = namedtuple(
-    "System", ["nelectrons", "charges", "centers", "vext", "density", "energy"]
+    "System", ["nelectrons", "charges", "centers"]
 )
 
 

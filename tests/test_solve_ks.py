@@ -13,9 +13,6 @@ def test_h2():
         charges=charges,
         centers=centers,
         nelectrons=nelectrons,
-        vext=None,
-        density=None,
-        energy=None,
     )
     grid = torch.arange(-10, 10, 0.1)
     density, energy = solve_ks(H2, grid)
