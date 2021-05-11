@@ -1,7 +1,7 @@
 import torch
 from torch.testing import assert_allclose
 
-from torchdft.functionals import (
+from torchdft.gridbasis import (
     get_external_potential,
     get_external_potential_energy,
     get_gradient,

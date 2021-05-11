@@ -3,14 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import torch
 
-from .functionals import (
-    get_external_potential,
-    get_hartree_potential,
-    get_kinetic_matrix,
-    get_XC_energy,
-    get_XC_potential,
-)
-from .utils import GeneralizedDiagonalizer, exp_coulomb, get_dx
+from .utils import GeneralizedDiagonalizer
 from .xc_functionals import exponential_coulomb_LDA_XC_energy_density
 
 __all__ = ["solve_ks"]
@@ -23,31 +16,6 @@ def ks_iteration(F, S, n_electrons):
     density = (torch.column_stack((phi ** 2,) * 2)[:, :n_electrons]).sum(dim=-1)
     energy_orb = ((torch.column_stack((epsilon,) * 2)[:n_electrons])).sum()
     return density, energy_orb
-
-
-class GridBasis:
-    def __init__(self, system, grid, interaction_fn=exp_coulomb):
-        self.system = system
-        self.grid = grid
-        self.interaction_fn = interaction_fn
-        self.dx = get_dx(grid)
-
-    def get_core_integrals(self):
-        S = torch.full((len(self.grid),), self.dx).diag_embed()
-        T = self.dx * get_kinetic_matrix(self.grid)
-        v_ext = self.dx * get_external_potential(
-            self.system.charges, self.system.centers, self.grid, self.interaction_fn
-        )
-        return S, T, v_ext
-
-    def get_int_integrals(self, density, XC_energy_density):
-        v_H = self.dx * get_hartree_potential(density, self.grid, self.interaction_fn)
-        E_xc = get_XC_energy(density, self.grid, XC_energy_density)
-        v_xc = self.dx * get_XC_potential(density, self.grid, XC_energy_density)
-        return v_H, v_xc, E_xc
-
-    def integrate(self, f):
-        return f.sum() * self.dx
 
 
 def solve_ks(

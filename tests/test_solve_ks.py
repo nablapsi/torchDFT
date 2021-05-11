@@ -1,7 +1,8 @@
 import torch
 from torch.testing import assert_allclose
 
-from torchdft.scf import GridBasis, solve_ks
+from torchdft.gridbasis import GridBasis
+from torchdft.scf import solve_ks
 from torchdft.utils import System
 
 
