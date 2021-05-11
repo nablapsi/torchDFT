@@ -54,3 +54,16 @@ def exp_coulomb(r):
     Evaluates the exponential coulomb interaction.
     """
     return constants.A * torch.exp(-constants.kappa * torch.abs(r))
+
+
+class GeneralizedDiagonalizer:
+    """Solves the generalized eigenvalue problem A x = a B x."""
+
+    def __init__(self, B):
+        B, U = torch.linalg.eigh(B)
+        self.X = U @ (1 / B.sqrt()).diag_embed()
+
+    def eigh(self, A):
+        w, V = torch.linalg.eigh(self.X.t() @ A @ self.X)
+        V = self.X @ V
+        return w, V

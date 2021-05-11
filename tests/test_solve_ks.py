@@ -1,7 +1,7 @@
 import torch
 from torch.testing import assert_allclose
 
-from torchdft.scf import solve_ks
+from torchdft.scf import GridBasis, solve_ks
 from torchdft.utils import System
 
 
@@ -15,5 +15,6 @@ def test_h2():
         nelectrons=nelectrons,
     )
     grid = torch.arange(-10, 10, 0.1)
-    density, energy = solve_ks(H2, grid)
+    basis = GridBasis(H2, grid)
+    density, energy = solve_ks(H2, basis)
     assert_allclose(energy, -2.0)
