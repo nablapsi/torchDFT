@@ -8,6 +8,8 @@ from .utils import exp_coulomb, get_dx
 
 
 class GridBasis:
+    """Basis of equidistant 1D grid."""
+
     def __init__(self, system, grid, interaction_fn=exp_coulomb):
         self.system = system
         self.grid = grid
