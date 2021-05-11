@@ -18,13 +18,13 @@ __all__ = ["solve_ks"]
 
 def ks_iteration(n_electrons, v_eff, grid):
     dx = get_dx(grid)
-    n_occ = n_electrons // 2
+    n_occ = n_electrons // 2 + n_electrons % 2
     H = get_kinetic_matrix(grid) + v_eff.diag_embed()
     epsilon, phi = torch.linalg.eigh(H)
     epsilon, phi = epsilon[:n_occ], phi[:, :n_occ]
     phi = phi / ((phi ** 2).sum(dim=0) * dx).sqrt()  # normalize
-    density = (2 * (phi ** 2)).sum(dim=-1)
-    energy_orb = (2 * epsilon).sum()
+    density = (torch.column_stack((phi ** 2,) * 2)[:, :n_electrons]).sum(dim=-1)
+    energy_orb = ((torch.column_stack((epsilon,) * 2)[:n_electrons])).sum()
     return density, energy_orb
 
 
