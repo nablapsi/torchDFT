@@ -20,7 +20,7 @@ H2 = System(
 grid = torch.arange(-10, 10, 0.1)
 
 # Solve KS equations
-system = solve_ks(H2, grid, print_iterations=True)
+density, energy = solve_ks(H2, grid, print_iterations=True)
 
-density = torch.column_stack((grid, system.density)).numpy()
+density = torch.column_stack((grid, density)).numpy()
 np.savetxt("H2_density.dat", density)
