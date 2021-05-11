@@ -25,4 +25,5 @@ def get_vW_energy(density, grid):
 
 
 def get_TF_vW_energy(density, grid):
+    """Get TF + vW kinetic energy."""
     return get_TF_energy_1d(density, grid) + get_vW_energy(density, grid)
