@@ -27,11 +27,8 @@ class GaussianBasis:
 
     def get_int_integrals(self, P, xc_functional):
         V_H = torch.einsum("ijkl,kl->ij", self.eri, P)
+        P = P.detach().requires_grad_()
         density = Density(((self.phi @ P) * self.phi).sum(dim=-1))
-        density = density.detach()
-        density.value = density.value.requires_grad_()
-        xc_density = density.value * xc_functional(density)
-        E_xc = (xc_density.detach() * self.grid_weights).sum()
-        (v_xc,) = torch.autograd.grad(xc_density.sum(), density.value)
-        V_xc = torch.einsum("g,gi,gj->ij", v_xc * self.grid_weights, self.phi, self.phi)
-        return V_H, V_xc, E_xc
+        E_xc = (density.value * xc_functional(density) * self.grid_weights).sum()
+        (V_xc,) = torch.autograd.grad(E_xc, P)
+        return V_H, V_xc, E_xc.detach()
