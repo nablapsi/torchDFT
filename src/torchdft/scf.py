@@ -31,14 +31,15 @@ def solve_ks(
     S, T, V_ext = basis.get_core_integrals()
     S = GeneralizedDiagonalizer(S)
     F = T + V_ext
-    P_in, energy_prev = ks_iteration(F, S, n_electrons)
+    P_in, energy_orb = ks_iteration(F, S, n_electrons)
+    energy_prev = energy_orb + basis.E_nuc
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Absolute difference")
     for i in range(max_iterations):
         V_H, V_xc, E_xc = basis.get_int_integrals(P_in, XC_energy_density)
         F = T + V_ext + V_H + V_xc
         P_out, energy_orb = ks_iteration(F, S, n_electrons)
-        energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum()
+        energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc
         if print_iterations:
             print(
                 "%3i   %10.7f   %10.7f   %3.4e"

@@ -15,6 +15,14 @@ class GridBasis:
         self.grid = grid
         self.interaction_fn = interaction_fn
         self.dx = get_dx(grid)
+        self.E_nuc = (
+            (
+                (system.charges[:, None] * system.charges)
+                * interaction_fn(system.centers[:, None] - system.centers)
+            )
+            .triu(diagonal=1)
+            .sum()
+        )
 
     def get_core_integrals(self):
         S = torch.full((len(self.grid),), self.dx, device=self.grid.device).diag_embed()
