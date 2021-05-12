@@ -37,7 +37,7 @@ jobs:
       - name: Build
         run: poetry build
       - name: Install
-        run: pip install -U torchdft --pre -f ./dist
+        run: pip install -U torchdft[3d] --pre -f ./dist
       - name: Test
         run: pytest
       - name: Uninstall package

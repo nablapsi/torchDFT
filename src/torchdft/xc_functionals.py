@@ -65,3 +65,43 @@ def get_exponential_coulomb_LDAC_energy_density(
         )
     )
     return torch.where(y == 0.0, -A * y / math.pi / alpha, out)
+
+
+def lda_pw92(density):
+    """Perdew--Wang 1992 parametrization of LDA."""
+
+    def r_s(n):
+        return (3 / (4 * math.pi * n)) ** (1 / 3)
+
+    def k_F(n):
+        return (3 * math.pi ** 2 * n) ** (1 / 3)
+
+    def epsilon_Xunif(n):
+        return -3 * k_F(n) / (4 * math.pi)
+
+    def epsilon_Cunif(rs, zeta):
+        return (
+            epsilon_c0(rs)
+            + alpha_c(rs) * ff(zeta) / ff0 * (1 - zeta ** 4)
+            + (epsilon_c1(rs) - epsilon_c0(rs)) * ff(zeta) * zeta ** 4
+        )
+
+    def ff(zeta):
+        return ((1 + zeta) ** (4 / 3) + (1 - zeta) ** (4 / 3) - 2) / (2 ** (4 / 3) - 2)
+
+    ff0 = 1.709921
+
+    def epsilon_c0(rs):
+        return Gamma(rs, 0.0310907, 0.21370, 7.5957, 3.5876, 1.6382, 0.49294, 1)
+
+    def epsilon_c1(rs):
+        return Gamma(rs, 0.01554535, 0.20548, 14.1189, 6.1977, 3.3662, 0.62517, 1)
+
+    def alpha_c(rs):
+        return -Gamma(rs, 0.0168869, 0.11125, 10.357, 3.6231, 0.88026, 0.49671, 1)
+
+    def Gamma(rs, A, a1, b1, b2, b3, b4, p):
+        poly = b1 * rs ** (1 / 2) + b2 * rs + b3 * rs ** (3 / 2) + b4 * rs ** (p + 1)
+        return -2 * A * (1 + a1 * rs) * torch.log(1 + 1 / (2 * A * poly))
+
+    return epsilon_Xunif(density) + epsilon_Cunif(r_s(density), 0)
