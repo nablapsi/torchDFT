@@ -17,5 +17,5 @@ def test_h2():
     )
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density, energy = solve_ks(H2, basis)
+    density, energy = solve_ks(basis, H2.nelectrons)
     assert_allclose(energy, -2.0)

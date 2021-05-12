@@ -19,8 +19,8 @@ def ks_iteration(F, S, n_electrons):
 
 
 def solve_ks(
-    system,
     basis,
+    n_electrons,
     alpha=0.5,
     XC_energy_density=exponential_coulomb_LDA_XC_energy_density,
     max_iterations=100,
@@ -31,13 +31,13 @@ def solve_ks(
     S, T, V_ext = basis.get_core_integrals()
     S = GeneralizedDiagonalizer(S)
     F = T + V_ext
-    P_in, energy_prev = ks_iteration(F, S, system.nelectrons)
+    P_in, energy_prev = ks_iteration(F, S, n_electrons)
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Absolute difference")
     for i in range(max_iterations):
         V_H, V_xc, E_xc = basis.get_int_integrals(P_in, XC_energy_density)
         F = T + V_ext + V_H + V_xc
-        P_out, energy_orb = ks_iteration(F, S, system.nelectrons)
+        P_out, energy_orb = ks_iteration(F, S, n_electrons)
         energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum()
         if print_iterations:
             print(
