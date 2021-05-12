@@ -4,6 +4,7 @@
 
 import torch
 
+from .kinetic_functionals import vW_energy
 from .utils import exp_coulomb, get_dx
 
 
@@ -27,27 +28,40 @@ class GridBasis:
     def get_core_integrals(self):
         S = torch.full((len(self.grid),), self.dx, device=self.grid.device).diag_embed()
         T = self.dx * get_kinetic_matrix(self.grid)
-        v_ext = get_external_potential(
+        self.v_ext = get_external_potential(
             self.system.charges, self.system.centers, self.grid, self.interaction_fn
         )
-        return S, T, self.dx * v_ext.diag_embed()
+        return S, T, self.dx * self.v_ext.diag_embed()
 
-    def get_int_integrals(self, P, XC_energy_density):
+    def get_int_integrals(self, P, XC_energy_density, kinetic_functional=None):
         density = P.diag()
         v_H = get_hartree_potential(density, self.grid, self.interaction_fn)
         E_xc = get_XC_energy(density, self.grid, XC_energy_density)
         v_xc = get_XC_potential(density, self.grid, XC_energy_density)
-        return self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc
 
+        if kinetic_functional:
+            # For OF-DFT.
+            T_s = get_kinetic_potential(density, self.grid, kinetic_functional)
+            return (
+                self.dx * T_s.diag_embed(),
+                self.dx * v_H.diag_embed(),
+                self.dx * v_xc.diag_embed(),
+                E_xc,
+            )
+        else:
+            # For KS-DFT.
+            return (self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc)
 
-def get_gradient(grid_dim):
-    """Finite difference approximation of gradient operator."""
-    return (
-        (2.0 / 3.0 * torch.ones(grid_dim - 1)).diag_embed(offset=1)
-        + (-2.0 / 3.0 * torch.ones(grid_dim - 1)).diag_embed(offset=-1)
-        + (-1.0 / 12.0 * torch.ones(grid_dim - 2)).diag_embed(offset=2)
-        + (1.0 / 12.0 * torch.ones(grid_dim - 2)).diag_embed(offset=-2)
-    )
+    def get_energy(self, P, XC_energy_density, kinetic_functional):
+        density = P.diag()
+        return (
+            get_kinetic_energy(density, self.grid, vW_energy)
+            + get_kinetic_energy(density, self.grid, kinetic_functional)
+            + get_external_potential_energy(self.v_ext, density, self.grid)
+            + get_hartree_energy(density, self.grid, self.interaction_fn)
+            + get_XC_energy(density, self.grid, XC_energy_density)
+            + self.E_nuc
+        )
 
 
 def get_laplacian(grid_dim, device=None):

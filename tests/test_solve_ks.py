@@ -4,7 +4,7 @@ from torch.testing import assert_allclose
 
 from torchdft.gaussbasis import GaussianBasis
 from torchdft.gridbasis import GridBasis
-from torchdft.scf import solve_ks
+from torchdft.scf import solve_ks, solve_of
 from torchdft.utils import System
 
 
@@ -12,15 +12,33 @@ def test_h2():
     charges = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
     nelectrons = 2
-    H2 = System(
-        charges=charges,
-        centers=centers,
-        nelectrons=nelectrons,
-    )
+    H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
     density, energy = solve_ks(basis, H2.nelectrons)
     assert_allclose(energy, -1.4045913)
+
+
+def test_ks_of():
+    def null_pauli(density, grid):
+        """Null Pauli kinetic functional.
+
+        The OF-DFT calculation with null Pauli kinetic functional
+        should be equal to KS-DFT in H2."""
+        return (density * 0e0).sum()
+
+    charges = torch.tensor([1.0, 1.0])
+    centers = torch.tensor([0.0, 1.401118437])
+    nelectrons = 2
+    H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
+    grid = torch.arange(-10, 10, 0.1)
+    basis = GridBasis(H2, grid)
+    density_ks, energy_ks = solve_ks(basis, H2.nelectrons)
+    density_of, energy_of = solve_of(
+        basis, H2.nelectrons, kinetic_functional=null_pauli
+    )
+    assert_allclose(density_ks, density_of)
+    assert_allclose(energy_ks, energy_of)
 
 
 def test_h2_guuss():

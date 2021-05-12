@@ -2,11 +2,12 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from .gridbasis import get_gradient
+import torch
+
 from .utils import get_dx
 
 
-def get_TF_energy_1d(density, grid, A=0.3):
+def TF_energy_1d(density, grid, A=0.3):
     """Evaluate the Thomas Fermi kinetic energy in one dimension.
 
     https://journals.aps.org/pra/pdf/10.1103/PhysRevA.60.2285
@@ -15,15 +16,27 @@ def get_TF_energy_1d(density, grid, A=0.3):
     return A * (density ** 2).sum() * dx
 
 
-def get_vW_energy(density, grid):
+def vW_energy(density, grid):
     """Evaluate the von Weizsaecker kinetic energy."""
+
+    # NOTE: If get_gradient was defined in gridbasis.py there is a circular
+    # import between this two files.
+    def get_gradient(grid_dim, device=None):
+        """Finite difference approximation of gradient operator."""
+        return (
+            (2.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=1)
+            + (-2.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(
+                offset=-1
+            )
+            + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(
+                offset=2
+            )
+            + (1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(
+                offset=-2
+            )
+        )
 
     dx = get_dx(grid)
     grid_dim = grid.size(0)
-    grad_operator = get_gradient(grid_dim) / dx
+    grad_operator = get_gradient(grid_dim, device=grid.device) / dx
     return 1.0 / 8.0 * (grad_operator.mv(density) ** 2 / density).sum() * dx
-
-
-def get_TF_vW_energy(density, grid):
-    """Get TF + vW kinetic energy."""
-    return get_TF_energy_1d(density, grid) + get_vW_energy(density, grid)
