@@ -6,7 +6,7 @@ from torchdft.gaussbasis import GaussianBasis
 from torchdft.gridbasis import GridBasis
 from torchdft.scf import solve_scf
 from torchdft.utils import System
-from torchdft.xc_functionals import Lda1d, LdaPw92
+from torchdft.xc_functionals import PBE, Lda1d, LdaPw92
 
 
 def test_h2():
@@ -41,4 +41,15 @@ def test_h2_guuss():
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
     density, energy = solve_scf(basis, sum(mol.nelec), LdaPw92())
+    assert_allclose(energy, energy_true)
+
+
+def test_h2_gauss_pbe():
+    mol = gto.M(atom="H 0 0 0; H 0 0 1.1", basis="cc-pvdz", verbose=3)
+    mf = dft.RKS(mol)
+    mf.init_guess = "1e"
+    mf.xc = "pbe"
+    energy_true = mf.kernel()
+    basis = GaussianBasis(mol)
+    density, energy = solve_scf(basis, sum(mol.nelec), PBE())
     assert_allclose(energy, energy_true)
