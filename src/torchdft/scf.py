@@ -41,18 +41,24 @@ def solve_scf(
     if mode == "KS":
         energy_prev = energy_orb + basis.E_nuc
     elif mode == "OF":
-        energy = basis.get_energy(P_in, XC_energy_density, kinetic_functional)
+        energy = 0e0
 
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Absolute difference")
     for i in range(max_iterations):
-        V_H, V_xc, E_xc = basis.get_int_integrals(P_in, XC_energy_density)
-        F = T + V_ext + V_H + V_xc
-        P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
         if mode == "KS":
+            V_H, V_xc, E_xc = basis.get_int_integrals(P_in, XC_energy_density)
+            F = T + V_ext + V_H + V_xc
+            P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
             energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc
         elif mode == "OF":
-            energy = basis.get_energy(P_out, XC_energy_density, kinetic_functional)
+            T_s, V_H, V_xc, E_K, E_xc = basis.get_int_integrals(
+                P_in, XC_energy_density, kinetic_functional
+            )
+            F = T + T_s + V_ext + V_H + V_xc
+            P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
+            energy = E_K + ((V_ext + V_H / 2) * P_in).sum() + E_xc + basis.E_nuc
+
         if print_iterations:
             print(
                 "%3i   %10.7f   %10.7f   %3.4e"

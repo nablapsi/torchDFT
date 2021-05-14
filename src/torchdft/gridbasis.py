@@ -42,26 +42,19 @@ class GridBasis:
         if kinetic_functional:
             # For OF-DFT.
             T_s = get_kinetic_potential(density, self.grid, kinetic_functional)
+            E_K = get_kinetic_energy(
+                density, self.grid, vW_energy
+            ) + get_kinetic_energy(density, self.grid, kinetic_functional)
             return (
                 self.dx * T_s.diag_embed(),
                 self.dx * v_H.diag_embed(),
                 self.dx * v_xc.diag_embed(),
+                E_K,
                 E_xc,
             )
         else:
             # For KS-DFT.
             return (self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc)
-
-    def get_energy(self, P, XC_energy_density, kinetic_functional):
-        density = P.diag()
-        return (
-            get_kinetic_energy(density, self.grid, vW_energy)
-            + get_kinetic_energy(density, self.grid, kinetic_functional)
-            + get_external_potential_energy(self.v_ext, density, self.grid)
-            + get_hartree_energy(density, self.grid, self.interaction_fn)
-            + get_XC_energy(density, self.grid, XC_energy_density)
-            + self.E_nuc
-        )
 
 
 def get_laplacian(grid_dim, device=None):
