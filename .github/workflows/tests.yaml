@@ -33,12 +33,14 @@ jobs:
             ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
           key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}
       - name: Install dependencies
-        run: pip install -U poetry-dynamic-versioning pytest
+        run: pip install -U poetry-dynamic-versioning pytest coverage
       - name: Build
         run: poetry build
       - name: Install
         run: pip install -U torchdft[3d] --pre -f ./dist
       - name: Test
-        run: pytest
+        run: coverage run -m pytest
+      - name: Upload to Codecov
+        run: bash <(curl -s https://codecov.io/bash) -t ${{ secrets.CODECOV_TOKEN }}
       - name: Uninstall package
         run: pip uninstall -y torchdft
