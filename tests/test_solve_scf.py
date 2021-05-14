@@ -4,7 +4,7 @@ from torch.testing import assert_allclose
 
 from torchdft.gaussbasis import GaussianBasis
 from torchdft.gridbasis import GridBasis
-from torchdft.scf import solve_ks, solve_of
+from torchdft.scf import solve_scf
 from torchdft.utils import System
 
 
@@ -15,7 +15,7 @@ def test_h2():
     H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density, energy = solve_ks(basis, H2.nelectrons)
+    density, energy = solve_scf(basis, H2.nelectrons)
     assert_allclose(energy, -1.4045913)
 
 
@@ -33,9 +33,9 @@ def test_ks_of():
     H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density_ks, energy_ks = solve_ks(basis, H2.nelectrons)
-    density_of, energy_of = solve_of(
-        basis, H2.nelectrons, kinetic_functional=null_pauli
+    density_ks, energy_ks = solve_scf(basis, H2.nelectrons)
+    density_of, energy_of = solve_scf(
+        basis, H2.nelectrons, kinetic_functional=null_pauli, mode="OF"
     )
     assert_allclose(density_ks, density_of)
     assert_allclose(energy_ks, energy_of)
@@ -48,5 +48,5 @@ def test_h2_guuss():
     mf.xc = "lda,pw"
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy = solve_ks(basis, sum(mol.nelec))
+    density, energy = solve_scf(basis, sum(mol.nelec))
     assert_allclose(energy, energy_true)
