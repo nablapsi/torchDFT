@@ -1,4 +1,6 @@
 class Density:
+    """Density data structure."""
+
     def __init__(self, density, grad=None):
         self.value = density
         self.grad = grad
