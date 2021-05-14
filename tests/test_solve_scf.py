@@ -25,7 +25,7 @@ def test_ks_of():
 
         The OF-DFT calculation with null Pauli kinetic functional
         should be equal to KS-DFT in H2."""
-        return (density * 0e0).sum()
+        return (density.value * 0e0).sum()
 
     charges = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])

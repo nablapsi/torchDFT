@@ -25,9 +25,9 @@ def get_exponential_coulomb_LDAX_energy_density(
     [1] https://arxiv.org/pdf/1504.05620.pdf eq 17
     """
 
-    y = density * math.pi / kappa
+    y = density.value * math.pi / kappa
     return torch.where(
-        density > thres,
+        density.value > thres,
         (A / (2.0 * math.pi)) * (torch.log(1.0 + y * y) / y - 2 * torch.arctan(y)),
         (A / (2.0 * math.pi)) * (-y + y ** 3 / 6),
     )
@@ -40,7 +40,7 @@ def get_exponential_coulomb_LDAC_energy_density(
 
     Evaluate exchange potential.
     """
-    y = density * math.pi / kappa
+    y = density.value * math.pi / kappa
     alpha = 2.0
     beta = -1.00077
     gamma = 6.26099
@@ -49,7 +49,7 @@ def get_exponential_coulomb_LDAC_energy_density(
     sigma = -1.48334
     nu = 1.0
 
-    finite_y = torch.where(y == 0.0, density.new_tensor(1), y)
+    finite_y = torch.where(y == 0.0, density.value.new_tensor(1), y)
     out = (
         -A
         * finite_y

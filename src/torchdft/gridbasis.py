@@ -4,6 +4,7 @@
 
 import torch
 
+from .density import Density
 from .kinetic_functionals import vW_energy
 from .utils import exp_coulomb, get_dx
 
@@ -34,13 +35,14 @@ class GridBasis:
         return S, T, self.dx * self.v_ext.diag_embed()
 
     def get_int_integrals(self, P, XC_energy_density, kinetic_functional=None):
-        density = P.diag()
-        v_H = get_hartree_potential(density, self.grid, self.interaction_fn)
+        density = Density(P.diag())
+        v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
         E_xc = get_XC_energy(density, self.grid, XC_energy_density)
         v_xc = get_XC_potential(density, self.grid, XC_energy_density)
 
         if kinetic_functional:
             # For OF-DFT.
+            density.grad = self._get_density_gradient(density.value)
             T_s = get_kinetic_potential(density, self.grid, kinetic_functional)
             E_K = get_kinetic_energy(
                 density, self.grid, vW_energy
@@ -55,6 +57,20 @@ class GridBasis:
         else:
             # For KS-DFT.
             return (self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc)
+
+    def _get_density_gradient(self, density):
+        grad_operator = get_gradient(self.grid.size(0)) / self.dx
+        return grad_operator.mv(density)
+
+
+def get_gradient(grid_dim, device=None):
+    """Finite difference approximation of gradient operator."""
+    return (
+        (2.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=1)
+        + (-2.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=-1)
+        + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=2)
+        + (1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=-2)
+    )
 
 
 def get_laplacian(grid_dim, device=None):
@@ -186,19 +202,17 @@ def get_XC_energy(density, grid, XC_energy_density):
     """Evaluate XC energy."""
     dx = get_dx(grid)
 
-    return torch.dot(XC_energy_density(density), density) * dx
+    return torch.dot(XC_energy_density(density), density.value) * dx
 
 
 def get_XC_potential(density, grid, XC_energy_density):
     """Evaluate XC potential."""
-    # This copy is needed since it will load gradients on density tensor otherwise.
-    cdensity = density.clone().detach()
-    cdensity.requires_grad = True
-    cdensity.grad = None
+    density = density.detach()
+    density.value = density.value.requires_grad_()
     dx = get_dx(grid)
-    _ = get_XC_energy(cdensity, grid, XC_energy_density).backward()
+    _ = get_XC_energy(density, grid, XC_energy_density).backward()
 
-    return cdensity.grad / dx
+    return density.value.grad / dx
 
 
 def get_kinetic_energy(density, grid, K_functional):
@@ -208,10 +222,9 @@ def get_kinetic_energy(density, grid, K_functional):
 
 def get_kinetic_potential(density, grid, K_functional):
     """Evaluate functional derivative of kinetic energy wrt density."""
-    cdensity = density.clone().detach()
-    cdensity.requires_grad = True
-    cdensity.grad = None
+    density = density.detach()
+    density.value = density.value.requires_grad_()
     dx = get_dx(grid)
-    _ = get_kinetic_energy(cdensity, grid, K_functional).backward()
+    _ = get_kinetic_energy(density, grid, K_functional).backward()
 
-    return cdensity.grad / dx
+    return density.value.grad / dx

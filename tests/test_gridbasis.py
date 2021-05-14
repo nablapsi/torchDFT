@@ -1,6 +1,7 @@
 import torch
 from torch.testing import assert_allclose
 
+from torchdft.density import Density
 from torchdft.gridbasis import (
     get_external_potential,
     get_external_potential_energy,
@@ -122,15 +123,12 @@ class TestFunctionals:
         """
         grid = torch.arange(-5, 5, 0.1)
         dx = get_dx(grid)
-        density = gaussian(grid, 1, 1)
+        density = Density(gaussian(grid, 1, 1))
 
         pot = get_XC_potential(density, grid, exponential_coulomb_LDA_XC_energy_density)
 
-        density.requires_grad = True
-
-        # NOTE:_It is neccessary to reset the gradients since they have been
-        # filled in the evaluation of the XC potential.
-        density.grad = None
+        density = density.detach()
+        density.value.requires_grad = True
         ener = get_XC_energy(density, grid, exponential_coulomb_LDA_XC_energy_density)
         ener.backward()
-        assert_allclose(pot, density.grad / dx)
+        assert_allclose(pot, density.value.grad / dx)
