@@ -4,6 +4,7 @@
 import torch
 from pyscf import dft
 
+from .density import Density
 from .xc_functionals import lda_pw92
 
 
@@ -28,10 +29,11 @@ class GaussianBasis:
 
     def get_int_integrals(self, P, density):
         V_H = torch.einsum("ijkl,kl->ij", self.eri, P)
-        density = ((self.phi @ P) * self.phi).sum(dim=-1)
-        density = density.detach().requires_grad_()
-        xc_density = density * self.xc(density)
+        density = Density(((self.phi @ P) * self.phi).sum(dim=-1))
+        density = density.detach()
+        density.value = density.value.requires_grad_()
+        xc_density = density.value * self.xc(density)
         E_xc = (xc_density.detach() * self.grid_weights).sum()
-        (v_xc,) = torch.autograd.grad(xc_density.sum(), density)
+        (v_xc,) = torch.autograd.grad(xc_density.sum(), density.value)
         V_xc = torch.einsum("g,gi,gj->ij", v_xc * self.grid_weights, self.phi, self.phi)
         return V_H, V_xc, E_xc
