@@ -15,7 +15,7 @@ def test_h2():
     H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density, energy = solve_scf(basis, H2.nelectrons)
+    density, energy, converged = solve_scf(basis, H2.nelectrons)
     assert_allclose(energy, -1.4045913)
 
 
@@ -33,8 +33,8 @@ def test_ks_of():
     H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density_ks, energy_ks = solve_scf(basis, H2.nelectrons)
-    density_of, energy_of = solve_scf(
+    density_ks, energy_ks, converged = solve_scf(basis, H2.nelectrons)
+    density_of, energy_of, converged = solve_scf(
         basis, H2.nelectrons, kinetic_functional=null_pauli, mode="OF"
     )
     assert_allclose(density_ks, density_of)
@@ -48,5 +48,5 @@ def test_h2_guuss():
     mf.xc = "lda,pw"
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy = solve_scf(basis, sum(mol.nelec))
+    density, energy, converged = solve_scf(basis, sum(mol.nelec))
     assert_allclose(energy, energy_true)
