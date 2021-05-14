@@ -41,7 +41,7 @@ def solve_scf(
     if mode == "KS":
         energy_prev = energy_orb + basis.E_nuc
     elif mode == "OF":
-        energy = 0e0
+        energy_prev = 0e0
 
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Absolute difference")
