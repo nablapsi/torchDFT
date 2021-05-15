@@ -74,7 +74,7 @@ class Lda1d:
         return torch.where(y == 0.0, -A * y / math.pi / alpha, out)
 
 
-class Lda_pw92:
+class LdaPw92:
     """Perdew--Wang 1992 parametrization of LDA."""
 
     def __init__(self):

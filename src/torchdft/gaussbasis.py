@@ -5,13 +5,13 @@ import torch
 from pyscf import dft
 
 from .density import Density
-from .xc_functionals import Lda_pw92
+from .xc_functionals import LdaPw92
 
 
 class GaussianBasis:
     """Gaussian basis with radial grids from PySCF."""
 
-    def __init__(self, mol, xc=Lda_pw92, kinetic=None):
+    def __init__(self, mol, xc=LdaPw92, kinetic=None):
         self.mol = mol
         self.S = torch.from_numpy(self.mol.intor("int1e_ovlp"))
         self.T = torch.from_numpy(self.mol.intor("int1e_kin"))
