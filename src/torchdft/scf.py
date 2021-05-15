@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from .errors import SCFNotConverged
 from .utils import GeneralizedDiagonalizer
 
 __all__ = ["solve_scf"]
@@ -32,7 +33,6 @@ def solve_scf(
     mode="KS",
 ):
     """Given a system, evaluates its energy by solving the KS equations."""
-    converged = False
     S, T, V_ext = basis.get_core_integrals()
     S = GeneralizedDiagonalizer(S)
     F = T + V_ext
@@ -51,8 +51,9 @@ def solve_scf(
                 "%3i   %10.7f   %10.7f   %3.4e" % (i, energy_prev, energy, P_diff_norm)
             )
         if P_diff_norm < dm_threshold:
-            converged = True
             break
         P_in = P_in + alpha * (P_out - P_in)
         energy_prev = energy
-    return P_out, energy, converged
+    else:
+        raise SCFNotConverged()
+    return P_out, energy
