@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from .utils import GeneralizedDiagonalizer
-from .xc_functionals import exponential_coulomb_LDA_XC_energy_density
+from .xc_functionals import Lda1d
 
 __all__ = ["solve_scf"]
 
@@ -27,7 +27,7 @@ def solve_scf(
     n_electrons,
     alpha=0.5,
     kinetic_functional=None,
-    XC_energy_density=exponential_coulomb_LDA_XC_energy_density,
+    XC_energy_density=Lda1d,
     max_iterations=100,
     dm_threshold=1e-3,
     print_iterations=False,
@@ -48,14 +48,12 @@ def solve_scf(
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in range(max_iterations):
         if mode == "KS":
-            V_H, V_xc, E_xc = basis.get_int_integrals(P_in, XC_energy_density)
+            V_H, V_xc, E_xc = basis.get_int_integrals(P_in)
             F = T + V_ext + V_H + V_xc
             P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
             energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc
         elif mode == "OF":
-            T_s, V_H, V_xc, E_K, E_xc = basis.get_int_integrals(
-                P_in, XC_energy_density, kinetic_functional
-            )
+            T_s, V_H, V_xc, E_K, E_xc = basis.get_int_integrals(P_in)
             F = T + T_s + V_ext + V_H + V_xc
             P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
             energy = E_K + ((V_ext + V_H / 2) * P_in).sum() + E_xc + basis.E_nuc

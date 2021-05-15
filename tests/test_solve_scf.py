@@ -34,9 +34,8 @@ def test_ks_of():
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
     density_ks, energy_ks, converged = solve_scf(basis, H2.nelectrons)
-    density_of, energy_of, converged = solve_scf(
-        basis, H2.nelectrons, kinetic_functional=null_pauli, mode="OF"
-    )
+    basis = GridBasis(H2, grid, kinetic=null_pauli)
+    density_of, energy_of, converged = solve_scf(basis, H2.nelectrons, mode="OF")
     assert_allclose(density_ks, density_of)
     assert_allclose(energy_ks, energy_of)
 

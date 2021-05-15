@@ -7,14 +7,19 @@ import torch
 from .density import Density
 from .kinetic_functionals import vW_energy
 from .utils import exp_coulomb, get_dx
+from .xc_functionals import Lda1d
 
 
 class GridBasis:
     """Basis of equidistant 1D grid."""
 
-    def __init__(self, system, grid, interaction_fn=exp_coulomb):
+    def __init__(
+        self, system, grid, xc=Lda1d, kinetic=None, interaction_fn=exp_coulomb
+    ):
         self.system = system
         self.grid = grid
+        self.xc = xc()
+        self.kinetic = kinetic
         self.interaction_fn = interaction_fn
         self.dx = get_dx(grid)
         self.E_nuc = (
@@ -34,19 +39,20 @@ class GridBasis:
         )
         return S, T, self.dx * self.v_ext.diag_embed()
 
-    def get_int_integrals(self, P, XC_energy_density, kinetic_functional=None):
+    def get_int_integrals(self, P):
         density = Density(P.diag())
-        v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
-        E_xc = get_XC_energy(density, self.grid, XC_energy_density)
-        v_xc = get_XC_potential(density, self.grid, XC_energy_density)
-
-        if kinetic_functional:
-            # For OF-DFT.
+        if self.kinetic or self.xc.requires_grad:
             density.grad = self._get_density_gradient(density.value)
-            T_s = get_kinetic_potential(density, self.grid, kinetic_functional)
+
+        v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
+        E_xc, v_xc = get_XC_energy_potential(density, self.grid, self.xc)
+
+        if self.kinetic:
+            # For OF-DFT.
+            T_s = get_kinetic_potential(density, self.grid, self.kinetic)
             E_K = get_kinetic_energy(
                 density, self.grid, vW_energy
-            ) + get_kinetic_energy(density, self.grid, kinetic_functional)
+            ) + get_kinetic_energy(density, self.grid, self.kinetic)
             return (
                 self.dx * T_s.diag_embed(),
                 self.dx * v_H.diag_embed(),
@@ -198,21 +204,22 @@ def get_external_potential(charges, centers, grid, interaction_fn):
     return -torch.sum(c1 * interaction_fn(r1 - r2), axis=0)
 
 
-def get_XC_energy(density, grid, XC_energy_density):
+def get_XC_energy(density, grid, xc):
     """Evaluate XC energy."""
     dx = get_dx(grid)
 
-    return torch.dot(XC_energy_density(density), density.value) * dx
+    return torch.dot(xc.functional(density), density.value) * dx
 
 
-def get_XC_potential(density, grid, XC_energy_density):
+def get_XC_energy_potential(density, grid, xc):
     """Evaluate XC potential."""
     density = density.detach()
     density.value = density.value.requires_grad_()
     dx = get_dx(grid)
-    _ = get_XC_energy(density, grid, XC_energy_density).backward()
+    E_xc = get_XC_energy(density, grid, xc)
+    E_xc.backward()
 
-    return density.value.grad / dx
+    return E_xc.detach(), density.value.grad / dx
 
 
 def get_kinetic_energy(density, grid, K_functional):

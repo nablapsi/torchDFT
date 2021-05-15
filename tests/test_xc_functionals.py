@@ -2,17 +2,15 @@ import torch
 from torch.testing import assert_allclose
 
 from torchdft.density import Density
-from torchdft.xc_functionals import (
-    get_exponential_coulomb_LDAC_energy_density,
-    get_exponential_coulomb_LDAX_energy_density,
-)
+from torchdft.xc_functionals import Lda1d
 
 
 class TestXcFunctionals:
     def test_get_exponential_coulomb_LDAX_energy_density(self):
+        LDA = Lda1d()
         density = Density(torch.tensor([0.0, 1e-15, 1e-10, 1.0, 5.0]))
 
-        p1 = get_exponential_coulomb_LDAX_energy_density(density)
+        p1 = LDA.get_exponential_coulomb_LDAX_energy_density(density)
         p2 = torch.tensor(
             [
                 0.0,
@@ -25,9 +23,10 @@ class TestXcFunctionals:
         assert_allclose(p1, p2)
 
     def test_get_exponential_coulomb_LDAC_energy_density(self):
+        LDA = Lda1d()
         density = Density(torch.tensor([0.0, 1e-15, 1e-10, 1.0, 5.0]))
 
-        p1 = get_exponential_coulomb_LDAC_energy_density(density)
+        p1 = LDA.get_exponential_coulomb_LDAC_energy_density(density)
         p2 = torch.tensor(
             [
                 -0.0,

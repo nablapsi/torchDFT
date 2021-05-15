@@ -9,10 +9,10 @@ from torchdft.gridbasis import (
     get_hartree_potential,
     get_laplacian,
     get_XC_energy,
-    get_XC_potential,
+    get_XC_energy_potential,
 )
 from torchdft.utils import gaussian, get_dx, soft_coulomb
-from torchdft.xc_functionals import exponential_coulomb_LDA_XC_energy_density
+from torchdft.xc_functionals import Lda1d
 
 
 class TestFunctionals:
@@ -121,14 +121,15 @@ class TestFunctionals:
         The evaluated XC potential should be equal to the functional derivative
         of the XC energy with respect to the density.
         """
+        LDA = Lda1d()
         grid = torch.arange(-5, 5, 0.1)
         dx = get_dx(grid)
         density = Density(gaussian(grid, 1, 1))
 
-        pot = get_XC_potential(density, grid, exponential_coulomb_LDA_XC_energy_density)
+        _, pot = get_XC_energy_potential(density, grid, LDA)
 
         density = density.detach()
         density.value.requires_grad = True
-        ener = get_XC_energy(density, grid, exponential_coulomb_LDA_XC_energy_density)
+        ener = get_XC_energy(density, grid, LDA)
         ener.backward()
         assert_allclose(pot, density.value.grad / dx)

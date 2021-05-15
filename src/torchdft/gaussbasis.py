@@ -5,13 +5,13 @@ import torch
 from pyscf import dft
 
 from .density import Density
-from .xc_functionals import lda_pw92
+from .xc_functionals import Lda_pw92
 
 
 class GaussianBasis:
     """Gaussian basis with radial grids from PySCF."""
 
-    def __init__(self, mol, xc=lda_pw92):
+    def __init__(self, mol, xc=Lda_pw92, kinetic=None):
         self.mol = mol
         self.S = torch.from_numpy(self.mol.intor("int1e_ovlp"))
         self.T = torch.from_numpy(self.mol.intor("int1e_kin"))
@@ -21,18 +21,19 @@ class GaussianBasis:
         self.grid.build()
         self.grid_weights = torch.from_numpy(self.grid.weights)
         self.phi = torch.from_numpy(dft.numint.eval_ao(mol, self.grid.coords))
-        self.xc = xc
+        self.xc = xc()
+        self.kinetic = None
         self.E_nuc = mol.energy_nuc()
 
     def get_core_integrals(self):
         return self.S, self.T, self.V_ext
 
-    def get_int_integrals(self, P, density):
+    def get_int_integrals(self, P):
         V_H = torch.einsum("ijkl,kl->ij", self.eri, P)
         density = Density(((self.phi @ P) * self.phi).sum(dim=-1))
         density = density.detach()
         density.value = density.value.requires_grad_()
-        xc_density = density.value * self.xc(density)
+        xc_density = density.value * self.xc.functional(density)
         E_xc = (xc_density.detach() * self.grid_weights).sum()
         (v_xc,) = torch.autograd.grad(xc_density.sum(), density.value)
         V_xc = torch.einsum("g,gi,gj->ij", v_xc * self.grid_weights, self.phi, self.phi)
