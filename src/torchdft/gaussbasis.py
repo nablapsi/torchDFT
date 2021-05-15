@@ -25,6 +25,11 @@ class GaussianBasis:
         self.kinetic = None
         self.E_nuc = mol.energy_nuc()
 
+        if self.kinetic or self.xc.requires_grad:
+            raise NotImplementedError(
+                "OF-DFT or density gradient not yet implemented for 3D calculations."
+            )
+
     def get_core_integrals(self):
         return self.S, self.T, self.V_ext
 
