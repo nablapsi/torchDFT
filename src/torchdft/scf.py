@@ -2,7 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from .utils import GeneralizedDiagonalizer
-from .xc_functionals import Lda1d
 
 __all__ = ["solve_scf"]
 
@@ -26,8 +25,6 @@ def solve_scf(
     basis,
     n_electrons,
     alpha=0.5,
-    kinetic_functional=None,
-    XC_energy_density=Lda1d,
     max_iterations=100,
     dm_threshold=1e-3,
     print_iterations=False,
