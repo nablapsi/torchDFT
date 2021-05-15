@@ -24,6 +24,7 @@ def ks_iteration(F, S, n_electrons, mode="KS"):
 def solve_scf(
     basis,
     n_electrons,
+    xc_functional,
     alpha=0.5,
     max_iterations=100,
     dm_threshold=1e-3,
@@ -40,7 +41,7 @@ def solve_scf(
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in range(max_iterations):
-        V_H, V_xc, E_xc = basis.get_int_integrals(P_in)
+        V_H, V_xc, E_xc = basis.get_int_integrals(P_in, xc_functional)
         F = T + V_ext + V_H + V_xc
         P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
         energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc

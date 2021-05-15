@@ -5,7 +5,7 @@ from torch.testing import assert_allclose
 
 from torchdft.density import Density
 from torchdft.gridbasis import get_gradient
-from torchdft.kinetic_functionals import TF_energy_1d, vW_energy
+from torchdft.kinetic_functionals import ThomasFermi1D, VonWeizsaecker
 from torchdft.utils import gaussian, get_dx
 
 
@@ -15,7 +15,7 @@ class TestKineticFunctionals:
         density = Density(gaussian(grid, 0, 1))
 
         assert_allclose(
-            1 / (2.0 * math.sqrt(math.pi)), TF_energy_1d(density, grid, A=1.0)
+            1 / (2.0 * math.sqrt(math.pi)), ThomasFermi1D(A=1.0)(density).sum() * 0.1
         )
 
     def test_get_vW_energy(self):
@@ -25,4 +25,4 @@ class TestKineticFunctionals:
         grad_operator = get_gradient(grid.size(0)) / dx
         density.grad = grad_operator.mv(density.value)
 
-        assert_allclose(1.0 / 8.0, vW_energy(density, grid))
+        assert_allclose(1.0 / 8.0, VonWeizsaecker()(density).sum() * 0.1)

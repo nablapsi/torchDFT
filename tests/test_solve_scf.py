@@ -6,6 +6,7 @@ from torchdft.gaussbasis import GaussianBasis
 from torchdft.gridbasis import GridBasis
 from torchdft.scf import solve_scf
 from torchdft.utils import System
+from torchdft.xc_functionals import Lda1d, LdaPw92
 
 
 def test_h2():
@@ -15,27 +16,21 @@ def test_h2():
     H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density, energy, converged = solve_scf(basis, H2.nelectrons)
+    density, energy, converged = solve_scf(basis, H2.nelectrons, Lda1d())
     assert_allclose(energy, -1.4045913)
 
 
 def test_ks_of():
-    def null_pauli(density, grid):
-        """Null Pauli kinetic functional.
-
-        The OF-DFT calculation with null Pauli kinetic functional
-        should be equal to KS-DFT in H2."""
-        return (density.value * 0e0).sum()
-
     charges = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
     nelectrons = 2
     H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density_ks, energy_ks, converged = solve_scf(basis, H2.nelectrons)
-    basis = GridBasis(H2, grid, kinetic=null_pauli)
-    density_of, energy_of, converged = solve_scf(basis, H2.nelectrons, mode="OF")
+    density_ks, energy_ks, converged = solve_scf(basis, H2.nelectrons, Lda1d())
+    density_of, energy_of, converged = solve_scf(
+        basis, H2.nelectrons, Lda1d(), mode="OF"
+    )
     assert_allclose(density_ks, density_of)
     assert_allclose(energy_ks, energy_of)
 
@@ -47,5 +42,5 @@ def test_h2_guuss():
     mf.xc = "lda,pw"
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy, converged = solve_scf(basis, sum(mol.nelec))
+    density, energy, converged = solve_scf(basis, sum(mol.nelec), LdaPw92())
     assert_allclose(energy, energy_true)

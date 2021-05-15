@@ -13,10 +13,9 @@ class Lda1d:
     """LDA XC functional in 1D."""
 
     def __init__(self):
-        self.functional = self.exponential_coulomb_LDA_XC_energy_density
         self.requires_grad = False
 
-    def exponential_coulomb_LDA_XC_energy_density(self, density):
+    def __call__(self, density):
         """LDA XC energy for exponential coulomb interaction."""
         return self.get_exponential_coulomb_LDAX_energy_density(
             density
@@ -78,10 +77,9 @@ class LdaPw92:
     """Perdew--Wang 1992 parametrization of LDA."""
 
     def __init__(self):
-        self.functional = self.lda_pw92
         self.requires_grad = False
 
-    def lda_pw92(self, density):
+    def __call__(self, density):
         """Perdew--Wang 1992 parametrization of LDA."""
 
         def Gamma(A, a1, b1, b2, b3, b4, p):
