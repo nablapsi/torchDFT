@@ -59,7 +59,7 @@ def solve_scf(
             energy = E_K + ((V_ext + V_H / 2) * P_in).sum() + E_xc + basis.E_nuc
 
         P_diff_norm = (P_out - P_in).norm()
-        if print_iterations:
+        if print_iterations and i % print_iterations == 0:
             print(
                 "%3i   %10.7f   %10.7f   %3.4e" % (i, energy_prev, energy, P_diff_norm)
             )
