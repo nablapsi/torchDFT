@@ -50,15 +50,11 @@ class GridBasis:
         if self.kinetic:
             # For OF-DFT.
             T_s = get_kinetic_potential(density, self.grid, self.kinetic)
-            E_K = get_kinetic_energy(
-                density, self.grid, vW_energy
-            ) + get_kinetic_energy(density, self.grid, self.kinetic)
+            E_K = get_kinetic_energy(density, self.grid, self.kinetic)
             return (
-                self.dx * T_s.diag_embed(),
                 self.dx * v_H.diag_embed(),
-                self.dx * v_xc.diag_embed(),
-                E_K,
-                E_xc,
+                self.dx * (T_s + v_xc).diag_embed(),
+                E_K + E_xc,
             )
         else:
             # For KS-DFT.

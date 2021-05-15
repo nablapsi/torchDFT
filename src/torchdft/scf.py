@@ -36,25 +36,14 @@ def solve_scf(
     S = GeneralizedDiagonalizer(S)
     F = T + V_ext
     P_in, energy_orb = ks_iteration(F, S, n_electrons, mode)
-    if mode == "KS":
-        energy_prev = energy_orb + basis.E_nuc
-    elif mode == "OF":
-        energy_prev = 0e0
-
+    energy_prev = energy_orb + basis.E_nuc
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in range(max_iterations):
-        if mode == "KS":
-            V_H, V_xc, E_xc = basis.get_int_integrals(P_in)
-            F = T + V_ext + V_H + V_xc
-            P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
-            energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc
-        elif mode == "OF":
-            T_s, V_H, V_xc, E_K, E_xc = basis.get_int_integrals(P_in)
-            F = T + T_s + V_ext + V_H + V_xc
-            P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
-            energy = E_K + ((V_ext + V_H / 2) * P_in).sum() + E_xc + basis.E_nuc
-
+        V_H, V_xc, E_xc = basis.get_int_integrals(P_in)
+        F = T + V_ext + V_H + V_xc
+        P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
+        energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc
         P_diff_norm = (P_out - P_in).norm()
         if print_iterations and i % print_iterations == 0:
             print(
