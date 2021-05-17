@@ -13,10 +13,9 @@ class Lda1d:
     """LDA XC functional in 1D."""
 
     def __init__(self):
-        self.functional = self.exponential_coulomb_LDA_XC_energy_density
         self.requires_grad = False
 
-    def exponential_coulomb_LDA_XC_energy_density(self, density):
+    def __call__(self, density):
         """LDA XC energy for exponential coulomb interaction."""
         return self.get_exponential_coulomb_LDAX_energy_density(
             density
@@ -77,32 +76,54 @@ class Lda1d:
 class LdaPw92:
     """Perdew--Wang 1992 parametrization of LDA."""
 
-    def __init__(self):
-        self.functional = self.lda_pw92
-        self.requires_grad = False
+    requires_grad = False
 
-    def lda_pw92(self, density):
-        """Perdew--Wang 1992 parametrization of LDA."""
+    def __call__(self, density):
+        eps_x, eps_c, *_ = _lda_pw92(density.value)
+        return eps_x + eps_c
 
-        def Gamma(A, a1, b1, b2, b3, b4, p):
-            poly = (
-                b1 * rs ** (1 / 2) + b2 * rs + b3 * rs ** (3 / 2) + b4 * rs ** (p + 1)
-            )
-            return -2 * A * (1 + a1 * rs) * torch.log(1 + 1 / (2 * A * poly))
 
-        density = density.value
-        zeta = 0
-        rs = (3 / (4 * math.pi * density)) ** (1 / 3)
-        kF = (3 * math.pi ** 2 * density) ** (1 / 3)
-        eps_x = -3 * kF / (4 * math.pi)
-        ff0 = 1.709921
-        ff = ((1 + zeta) ** (4 / 3) + (1 - zeta) ** (4 / 3) - 2) / (2 ** (4 / 3) - 2)
-        eps_c0 = Gamma(0.0310907, 0.21370, 7.5957, 3.5876, 1.6382, 0.49294, 1)
-        eps_c1 = Gamma(0.01554535, 0.20548, 14.1189, 6.1977, 3.3662, 0.62517, 1)
-        alpha_c = -Gamma(0.0168869, 0.11125, 10.357, 3.6231, 0.88026, 0.49671, 1)
-        eps_c = (
-            eps_c0
-            + alpha_c * ff / ff0 * (1 - zeta ** 4)
-            + (eps_c1 - eps_c0) * ff * zeta ** 4
-        )
+def _lda_pw92(density):
+    def Gamma(A, a1, b1, b2, b3, b4, p):
+        poly = b1 * rs ** (1 / 2) + b2 * rs + b3 * rs ** (3 / 2) + b4 * rs ** (p + 1)
+        return -2 * A * (1 + a1 * rs) * torch.log(1 + 1 / (2 * A * poly))
+
+    zeta = 0
+    rs = (3 / (4 * math.pi * density)) ** (1 / 3)
+    kF = (3 * math.pi ** 2 * density) ** (1 / 3)
+    eps_x = -3 * kF / (4 * math.pi)
+    ff0 = 1.709921
+    ff = ((1 + zeta) ** (4 / 3) + (1 - zeta) ** (4 / 3) - 2) / (2 ** (4 / 3) - 2)
+    eps_c0 = Gamma(0.0310907, 0.21370, 7.5957, 3.5876, 1.6382, 0.49294, 1)
+    eps_c1 = Gamma(0.01554535, 0.20548, 14.1189, 6.1977, 3.3662, 0.62517, 1)
+    alpha_c = -Gamma(0.0168869, 0.11125, 10.357, 3.6231, 0.88026, 0.49671, 1)
+    eps_c = (
+        eps_c0
+        + alpha_c * ff / ff0 * (1 - zeta ** 4)
+        + (eps_c1 - eps_c0) * ff * zeta ** 4
+    )
+    return eps_x, eps_c, kF, zeta
+
+
+class PBE:
+    """Perdew--Burke--Ernzerhof functional."""
+
+    requires_grad = True
+
+    def __call__(self, density):
+        eps_x, eps_c, kF, zeta = _lda_pw92(density.value)
+        s = density.grad / (2 * kF * density.value)
+        ks = torch.sqrt(4 * kF / math.pi)
+        phi = ((1 + zeta) ** (2 / 3) + (1 - zeta) ** (2 / 3)) / 2
+        t = density.grad / (2 * phi * ks * density.value)
+        beta = 0.066725
+        kappa = 0.804
+        mu = beta * (math.pi ** 2 / 3)
+        FX = 1 + kappa - kappa / (1 + mu * s ** 2 / kappa)
+        eps_x = eps_x * FX
+        gamma = (1 - math.log(2)) / math.pi ** 2
+        A = beta / gamma * 1 / (torch.exp(-eps_c / (gamma * phi ** 3)) - 1 + 1e-30)
+        poly = t ** 2 * (1 + A * t ** 2) / (1 + A * t ** 2 + A ** 2 * t ** 4)
+        H = gamma * phi ** 3 * torch.log(1 + beta / gamma * poly)
+        eps_c = eps_c + H
         return eps_x + eps_c
