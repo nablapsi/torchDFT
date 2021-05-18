@@ -12,8 +12,7 @@ from torchdft import constants
 class Lda1d:
     """LDA XC functional in 1D."""
 
-    def __init__(self):
-        self.requires_grad = False
+    requires_grad = False
 
     def __call__(self, density):
         """LDA XC energy for exponential coulomb interaction."""
@@ -88,7 +87,7 @@ def _lda_pw92(density):
         poly = b1 * rs ** (1 / 2) + b2 * rs + b3 * rs ** (3 / 2) + b4 * rs ** (p + 1)
         return -2 * A * (1 + a1 * rs) * torch.log(1 + 1 / (2 * A * poly))
 
-    zeta = 0
+    zeta = torch.tensor(0)
     rs = (3 / (4 * math.pi * density)) ** (1 / 3)
     kF = (3 * math.pi ** 2 * density) ** (1 / 3)
     eps_x = -3 * kF / (4 * math.pi)

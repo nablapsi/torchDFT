@@ -10,11 +10,11 @@ __all__ = ["solve_scf"]
 def ks_iteration(F, S, n_electrons, mode="KS"):
     if mode == "KS":
         n_occ = n_electrons // 2 + n_electrons % 2
-        occ = F.new_ones(n_occ)  # orbital occupation numbers
+        occ = F.new_ones((n_occ,))  # orbital occupation numbers
         occ[: n_electrons // 2] += 1
     elif mode == "OF":
         n_occ = 1
-        occ = n_electrons
+        occ = F.new_tensor([n_electrons])
     epsilon, C = S.eigh(F)
     epsilon, C = epsilon[:n_occ], C[:, :n_occ]
     P = (C * occ) @ C.t()

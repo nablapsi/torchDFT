@@ -128,7 +128,7 @@ def get_hartree_potential(density, grid, interaction_fn):
     r1 = torch.vstack((grid,) * grid_dim)
     r2 = torch.swapdims(r1, 0, 1)
 
-    return torch.sum(n1 * interaction_fn(r1 - r2), axis=1) * dx
+    return torch.sum(n1 * interaction_fn(r1 - r2), dim=1) * dx
 
 
 def get_external_potential_energy(external_potential, density, grid):
@@ -179,7 +179,7 @@ def get_external_potential(charges, centers, grid, interaction_fn):
     r2 = torch.swapdims(torch.vstack((centers,) * grid_dim), 0, 1)
     c1 = torch.swapdims(torch.vstack((charges,) * grid_dim), 0, 1)
 
-    return -torch.sum(c1 * interaction_fn(r1 - r2), axis=0)
+    return -torch.sum(c1 * interaction_fn(r1 - r2), dim=0)
 
 
 def get_XC_energy(density, grid, xc):
