@@ -8,8 +8,10 @@ import torch
 
 from torchdft import constants
 
+from .functional import Functional
 
-class Lda1d:
+
+class Lda1d(Functional):
     """LDA XC functional in 1D."""
 
     requires_grad = False
@@ -72,7 +74,7 @@ class Lda1d:
         return torch.where(y == 0.0, -A * y / math.pi / alpha, out)
 
 
-class LdaPw92:
+class LdaPw92(Functional):
     """Perdew--Wang 1992 parametrization of LDA."""
 
     requires_grad = False
@@ -104,7 +106,7 @@ def _lda_pw92(density):
     return eps_x, eps_c, kF, zeta
 
 
-class PBE:
+class PBE(Functional):
     """Perdew--Burke--Ernzerhof functional."""
 
     requires_grad = True

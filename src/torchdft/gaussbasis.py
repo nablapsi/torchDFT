@@ -4,10 +4,11 @@
 import torch
 from pyscf import dft
 
+from .basis import Basis
 from .density import Density
 
 
-class GaussianBasis:
+class GaussianBasis(Basis):
     """Gaussian basis with radial grids from PySCF."""
 
     def __init__(self, mol):

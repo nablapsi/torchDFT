@@ -4,11 +4,12 @@
 
 import torch
 
+from .basis import Basis
 from .density import Density
 from .utils import exp_coulomb, get_dx
 
 
-class GridBasis:
+class GridBasis(Basis):
     """Basis of equidistant 1D grid."""
 
     def __init__(self, system, grid, interaction_fn=exp_coulomb):
