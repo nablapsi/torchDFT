@@ -3,8 +3,10 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
 from collections import namedtuple
+from typing import Tuple
 
 import torch
+from torch import Tensor
 
 from torchdft import constants
 
@@ -12,7 +14,7 @@ from torchdft import constants
 System = namedtuple("System", ["nelectrons", "charges", "centers"])
 
 
-def get_dx(grid):
+def get_dx(grid: Tensor) -> float:
     """Get grid spacing.
 
     Given a grid as a 1D array returns the spacing between grid points.
@@ -26,7 +28,7 @@ def get_dx(grid):
     return ((torch.amax(grid) - torch.amin(grid)) / (grid_dim - 1)).item()
 
 
-def gaussian(x, mean, sigma):
+def gaussian(x: Tensor, mean: float, sigma: float) -> Tensor:
     """Gaussian function.
 
     Evaluates a gaussian function with mean = mean and std = sigma over
@@ -40,7 +42,7 @@ def gaussian(x, mean, sigma):
     )
 
 
-def soft_coulomb(r):
+def soft_coulomb(r: Tensor) -> Tensor:
     """Soft Coulomb.
 
     Evaluates the soft coulomb interaction.
@@ -48,7 +50,7 @@ def soft_coulomb(r):
     return 1 / torch.sqrt(r ** 2 + 1e0)
 
 
-def exp_coulomb(r):
+def exp_coulomb(r: Tensor) -> Tensor:
     """Exponential coulomb.
 
     Evaluates the exponential coulomb interaction.
@@ -59,11 +61,11 @@ def exp_coulomb(r):
 class GeneralizedDiagonalizer:
     """Solves the generalized eigenvalue problem A x = a B x."""
 
-    def __init__(self, B):
+    def __init__(self, B: Tensor):
         B, U = torch.linalg.eigh(B)
         self.X = U @ (1 / B.sqrt()).diag_embed()
 
-    def eigh(self, A):
+    def eigh(self, A: Tensor) -> Tuple[Tensor, Tensor]:
         w, V = torch.linalg.eigh(self.X.t() @ A @ self.X)
         V = self.X @ V
         return w, V

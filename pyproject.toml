@@ -47,6 +47,7 @@ isort = "^5"
 pydocstyle = "^5"
 pytest = "^6.2.4"
 coverage = "^5.5"
+mypy = ">=0.800"
 
 [tool.poetry-dynamic-versioning]
 enable = true

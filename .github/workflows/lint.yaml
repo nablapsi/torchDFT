@@ -44,3 +44,33 @@ jobs:
         run: pip install pydocstyle
       - uses: actions/checkout@v2
       - run: pydocstyle src
+  mypy:
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.x
+        id: setup-python
+      - name: Install Poetry
+        run: |
+          curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
+          echo $HOME/.poetry/bin >>$GITHUB_PATH
+      - uses: actions/checkout@v2
+      - name: Create Python virtual environment
+        run: |
+          python -m venv venv
+          echo VIRTUAL_ENV=$PWD/venv >>$GITHUB_ENV
+          echo $PWD/venv/bin >>$GITHUB_PATH
+          echo venv >>.git/info/exclude
+      - uses: actions/cache@v2
+        with:
+          path: |
+            poetry.lock
+            ${{ env.VIRTUAL_ENV }}/bin
+            ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-1
+      - name: Install dependencies
+        run: |
+          poetry install --no-dev
+          pip install mypy
+      - run: mypy
