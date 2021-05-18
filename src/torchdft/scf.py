@@ -1,20 +1,28 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from typing import Tuple, Union
+
+from torch import Tensor
+
+from .basis import Basis
 from .errors import SCFNotConverged
+from .functional import Functional
 from .utils import GeneralizedDiagonalizer
 
 __all__ = ["solve_scf"]
 
 
-def ks_iteration(F, S, n_electrons, mode="KS"):
+def ks_iteration(
+    F: Tensor, S: GeneralizedDiagonalizer, n_electrons: int, mode: str = "KS"
+) -> Tuple[Tensor, Tensor]:
     if mode == "KS":
         n_occ = n_electrons // 2 + n_electrons % 2
-        occ = F.new_ones(n_occ)  # orbital occupation numbers
+        occ = F.new_ones((n_occ,))  # orbital occupation numbers
         occ[: n_electrons // 2] += 1
     elif mode == "OF":
         n_occ = 1
-        occ = n_electrons
+        occ = F.new_tensor([n_electrons])
     epsilon, C = S.eigh(F)
     epsilon, C = epsilon[:n_occ], C[:, :n_occ]
     P = (C * occ) @ C.t()
@@ -23,15 +31,15 @@ def ks_iteration(F, S, n_electrons, mode="KS"):
 
 
 def solve_scf(
-    basis,
-    n_electrons,
-    xc_functional,
-    alpha=0.5,
-    max_iterations=100,
-    dm_threshold=1e-3,
-    print_iterations=False,
-    mode="KS",
-):
+    basis: Basis,
+    n_electrons: int,
+    xc_functional: Functional,
+    alpha: float = 0.5,
+    max_iterations: int = 100,
+    dm_threshold: float = 1e-3,
+    print_iterations: Union[bool, int] = False,
+    mode: str = "KS",
+) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
     S, T, V_ext = basis.get_core_integrals()
     S = GeneralizedDiagonalizer(S)

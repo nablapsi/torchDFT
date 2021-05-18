@@ -3,27 +3,35 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import math
+from typing import Tuple
 
 import torch
+from torch import Tensor
 
 from torchdft import constants
 
+from .density import Density
+from .functional import Functional
 
-class Lda1d:
+
+class Lda1d(Functional):
     """LDA XC functional in 1D."""
 
-    def __init__(self):
-        self.requires_grad = False
+    requires_grad = False
 
-    def __call__(self, density):
+    def __call__(self, density: Density) -> Tensor:
         """LDA XC energy for exponential coulomb interaction."""
         return self.get_exponential_coulomb_LDAX_energy_density(
             density
         ) + self.get_exponential_coulomb_LDAC_energy_density(density)
 
     def get_exponential_coulomb_LDAX_energy_density(
-        self, density, A=constants.A, kappa=constants.kappa, thres=1e-15
-    ):
+        self,
+        density: Density,
+        A: float = constants.A,
+        kappa: float = constants.kappa,
+        thres: float = 1e-15,
+    ) -> Tensor:
         """Evaluate exchange potential.
 
         Evaluate exchange potential.
@@ -39,8 +47,8 @@ class Lda1d:
         )
 
     def get_exponential_coulomb_LDAC_energy_density(
-        self, density, A=constants.A, kappa=constants.kappa
-    ):
+        self, density: Density, A: float = constants.A, kappa: float = constants.kappa
+    ) -> Tensor:
         """Evaluate correlation potential.
 
         Evaluate exchange potential.
@@ -73,22 +81,24 @@ class Lda1d:
         return torch.where(y == 0.0, -A * y / math.pi / alpha, out)
 
 
-class LdaPw92:
+class LdaPw92(Functional):
     """Perdew--Wang 1992 parametrization of LDA."""
 
     requires_grad = False
 
-    def __call__(self, density):
+    def __call__(self, density: Density) -> Tensor:
         eps_x, eps_c, *_ = _lda_pw92(density.value)
         return eps_x + eps_c
 
 
-def _lda_pw92(density):
-    def Gamma(A, a1, b1, b2, b3, b4, p):
+def _lda_pw92(density: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def Gamma(
+        A: float, a1: float, b1: float, b2: float, b3: float, b4: float, p: int
+    ) -> Tensor:
         poly = b1 * rs ** (1 / 2) + b2 * rs + b3 * rs ** (3 / 2) + b4 * rs ** (p + 1)
         return -2 * A * (1 + a1 * rs) * torch.log(1 + 1 / (2 * A * poly))
 
-    zeta = 0
+    zeta = torch.tensor(0)
     rs = (3 / (4 * math.pi * density)) ** (1 / 3)
     kF = (3 * math.pi ** 2 * density) ** (1 / 3)
     eps_x = -3 * kF / (4 * math.pi)
@@ -105,12 +115,12 @@ def _lda_pw92(density):
     return eps_x, eps_c, kF, zeta
 
 
-class PBE:
+class PBE(Functional):
     """Perdew--Burke--Ernzerhof functional."""
 
     requires_grad = True
 
-    def __call__(self, density):
+    def __call__(self, density: Density) -> Tensor:
         eps_x, eps_c, kF, zeta = _lda_pw92(density.value)
         s = density.grad / (2 * kF * density.value)
         ks = torch.sqrt(4 * kF / math.pi)

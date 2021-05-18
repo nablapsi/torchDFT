@@ -1,16 +1,22 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from typing import Tuple
+
 import torch
 from pyscf import dft
+from pyscf.gto.mole import Mole
+from torch import Tensor
 
+from .basis import Basis
 from .density import Density
+from .functional import Functional
 
 
-class GaussianBasis:
+class GaussianBasis(Basis):
     """Gaussian basis with radial grids from PySCF."""
 
-    def __init__(self, mol):
+    def __init__(self, mol: Mole):
         self.mol = mol
         self.S = torch.from_numpy(self.mol.intor("int1e_ovlp"))
         self.T = torch.from_numpy(self.mol.intor("int1e_kin"))
@@ -24,10 +30,12 @@ class GaussianBasis:
         self.grad_phi = phi[1:4]
         self.E_nuc = mol.energy_nuc()
 
-    def get_core_integrals(self):
+    def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self.S, self.T, self.V_ext
 
-    def get_int_integrals(self, P, xc_functional):
+    def get_int_integrals(
+        self, P: Tensor, xc_functional: Functional
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         V_H = torch.einsum("ijkl,kl->ij", self.eri, P)
         P = P.detach().requires_grad_()
         density = Density(((self.phi @ P) * self.phi).sum(dim=-1))

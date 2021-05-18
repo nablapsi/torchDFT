@@ -1,17 +1,26 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from typing import Callable, Tuple
 
 import torch
+from torch import Tensor
 
+from .basis import Basis
 from .density import Density
-from .utils import exp_coulomb, get_dx
+from .functional import Functional
+from .utils import System, exp_coulomb, get_dx
 
 
-class GridBasis:
+class GridBasis(Basis):
     """Basis of equidistant 1D grid."""
 
-    def __init__(self, system, grid, interaction_fn=exp_coulomb):
+    def __init__(
+        self,
+        system: System,
+        grid: Tensor,
+        interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
+    ):
         self.system = system
         self.grid = grid
         self.interaction_fn = interaction_fn
@@ -25,7 +34,7 @@ class GridBasis:
             .sum()
         )
 
-    def get_core_integrals(self):
+    def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
         S = torch.full((len(self.grid),), self.dx, device=self.grid.device).diag_embed()
         T = self.dx * get_kinetic_matrix(self.grid)
         self.v_ext = get_external_potential(
@@ -33,7 +42,9 @@ class GridBasis:
         )
         return S, T, self.dx * self.v_ext.diag_embed()
 
-    def get_int_integrals(self, P, xc_functional):
+    def get_int_integrals(
+        self, P: Tensor, xc_functional: Functional
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         density = Density(P.diag())
         if xc_functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
@@ -42,12 +53,12 @@ class GridBasis:
         E_xc, v_xc = get_XC_energy_potential(density, self.grid, xc_functional)
         return self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc
 
-    def _get_density_gradient(self, density):
+    def _get_density_gradient(self, density: Tensor) -> Tensor:
         grad_operator = get_gradient(self.grid.size(0)) / self.dx
         return grad_operator.mv(density)
 
 
-def get_gradient(grid_dim, device=None):
+def get_gradient(grid_dim: int, device: torch.device = None) -> Tensor:
     """Finite difference approximation of gradient operator."""
     return (
         (2.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=1)
@@ -57,7 +68,7 @@ def get_gradient(grid_dim, device=None):
     )
 
 
-def get_laplacian(grid_dim, device=None):
+def get_laplacian(grid_dim: int, device: torch.device = None) -> Tensor:
     """Finite difference approximation of Laplacian operator."""
     return (
         (-2.5 * torch.ones(grid_dim, device=device)).diag_embed()
@@ -68,14 +79,16 @@ def get_laplacian(grid_dim, device=None):
     )
 
 
-def get_kinetic_matrix(grid):
+def get_kinetic_matrix(grid: Tensor) -> Tensor:
     """Kinetic operator matrix."""
     grid_dim = grid.size(0)
     dx = get_dx(grid)
     return -5e-1 * get_laplacian(grid_dim, device=grid.device) / (dx * dx)
 
 
-def get_hartree_energy(density, grid, interaction_fn):
+def get_hartree_energy(
+    density: Tensor, grid: Tensor, interaction_fn: Callable[[Tensor], Tensor]
+) -> Tensor:
     r"""Evaluate Hartree energy.
 
     Get Hartree energy evaluated as:
@@ -103,7 +116,9 @@ def get_hartree_energy(density, grid, interaction_fn):
     return 5e-1 * torch.sum(n1 * n2 * interaction_fn(r1 - r2)) * dx * dx
 
 
-def get_hartree_potential(density, grid, interaction_fn):
+def get_hartree_potential(
+    density: Tensor, grid: Tensor, interaction_fn: Callable[[Tensor], Tensor]
+) -> Tensor:
     r"""Evaluate Hartree potential.
 
     Get Hartree potential evaluated as:
@@ -128,10 +143,12 @@ def get_hartree_potential(density, grid, interaction_fn):
     r1 = torch.vstack((grid,) * grid_dim)
     r2 = torch.swapdims(r1, 0, 1)
 
-    return torch.sum(n1 * interaction_fn(r1 - r2), axis=1) * dx
+    return torch.sum(n1 * interaction_fn(r1 - r2), dim=1) * dx
 
 
-def get_external_potential_energy(external_potential, density, grid):
+def get_external_potential_energy(
+    external_potential: Tensor, density: Tensor, grid: Tensor
+) -> Tensor:
     r"""Evaluate external potential energy.
 
     Get external potential energy evaluated as:
@@ -152,7 +169,12 @@ def get_external_potential_energy(external_potential, density, grid):
     return torch.dot(external_potential, density) * dx
 
 
-def get_external_potential(charges, centers, grid, interaction_fn):
+def get_external_potential(
+    charges: Tensor,
+    centers: Tensor,
+    grid: Tensor,
+    interaction_fn: Callable[[Tensor], Tensor],
+) -> Tensor:
     r"""Evaluate external potential.
 
     Get external potential evaluated as:
@@ -179,17 +201,19 @@ def get_external_potential(charges, centers, grid, interaction_fn):
     r2 = torch.swapdims(torch.vstack((centers,) * grid_dim), 0, 1)
     c1 = torch.swapdims(torch.vstack((charges,) * grid_dim), 0, 1)
 
-    return -torch.sum(c1 * interaction_fn(r1 - r2), axis=0)
+    return -torch.sum(c1 * interaction_fn(r1 - r2), dim=0)
 
 
-def get_XC_energy(density, grid, xc):
+def get_XC_energy(density: Density, grid: Tensor, xc: Functional) -> Tensor:
     """Evaluate XC energy."""
     dx = get_dx(grid)
 
     return torch.dot(xc(density), density.value) * dx
 
 
-def get_XC_energy_potential(density, grid, xc):
+def get_XC_energy_potential(
+    density: Density, grid: Tensor, xc: Functional
+) -> Tuple[Tensor, Tensor]:
     """Evaluate XC potential."""
     density = density.detach()
     density.value = density.value.requires_grad_()

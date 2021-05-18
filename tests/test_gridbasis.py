@@ -38,7 +38,7 @@ class TestFunctionals:
 
         # Check against nested loop implementation:
         dx = get_dx(grid)
-        e2 = 0e0
+        e2 = torch.tensor(0.0)
         for n1, r1 in zip(density, grid):
             for n2, r2 in zip(density, grid):
                 disp = r1 - r2
