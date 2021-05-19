@@ -3,7 +3,6 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from typing import Tuple, Union
 
-import torch
 from torch import Tensor
 
 from .basis import Basis
@@ -15,9 +14,8 @@ __all__ = ["solve_scf"]
 
 
 def ks_iteration(F: Tensor, X: Tensor, occ: Tensor) -> Tuple[Tensor, Tensor]:
-    n_occ = occ.size(0)
-    epsilon, C = torch.linalg.eigh(X.t() @ F @ X)
-    C = X @ C
+    n_occ = occ.shape[-1]
+    epsilon, C = GeneralizedDiagonalizer.eigh(F, X)
     epsilon, C = epsilon[:n_occ], C[:, :n_occ]
     P = (C * occ) @ C.t()
     energy_orb = (epsilon * occ).sum()

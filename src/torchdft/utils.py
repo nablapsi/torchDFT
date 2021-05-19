@@ -80,7 +80,11 @@ class GeneralizedDiagonalizer:
         B, U = torch.linalg.eigh(B)
         self.X = U @ (1 / B.sqrt()).diag_embed()
 
-    def eigh(self, A: Tensor) -> Tuple[Tensor, Tensor]:
-        w, V = torch.linalg.eigh(self.X.t() @ A @ self.X)
-        V = self.X @ V
+    @staticmethod
+    def eigh(A: Tensor, X: Tensor) -> Tuple[Tensor, Tensor]:
+        w, V = torch.linalg.eigh(X.t() @ A @ X)
+        V = X @ V
         return w, V
+
+    def __call__(self, A: Tensor) -> Tuple[Tensor, Tensor]:
+        return self.eigh(A, self.X)
