@@ -16,7 +16,7 @@ def test_h2():
     H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density, energy = solve_scf(basis, H2.nelectrons, Lda1d())
+    density, energy = solve_scf(basis, H2.get_occ(), Lda1d())
     assert_allclose(energy, -1.4045913)
 
 
@@ -27,8 +27,8 @@ def test_ks_of():
     H2 = System(charges=charges, centers=centers, nelectrons=nelectrons)
     grid = torch.arange(-10, 10, 0.1)
     basis = GridBasis(H2, grid)
-    density_ks, energy_ks = solve_scf(basis, H2.nelectrons, Lda1d())
-    density_of, energy_of = solve_scf(basis, H2.nelectrons, Lda1d(), mode="OF")
+    density_ks, energy_ks = solve_scf(basis, H2.get_occ(), Lda1d())
+    density_of, energy_of = solve_scf(basis, H2.get_occ(mode="OF"), Lda1d())
     assert_allclose(density_ks, density_of)
     assert_allclose(energy_ks, energy_of)
 
@@ -38,9 +38,10 @@ def test_h2_guuss():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "lda,pw"
+    occ = torch.tensor([2])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy = solve_scf(basis, sum(mol.nelec), LdaPw92())
+    density, energy = solve_scf(basis, occ, LdaPw92())
     assert_allclose(energy, energy_true)
 
 
@@ -49,7 +50,8 @@ def test_h2_gauss_pbe():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "pbe"
+    occ = torch.tensor([2])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy = solve_scf(basis, sum(mol.nelec), PBE())
+    density, energy = solve_scf(basis, occ, PBE())
     assert_allclose(energy, energy_true)

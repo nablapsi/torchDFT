@@ -2,7 +2,6 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
-from collections import namedtuple
 from typing import Tuple
 
 import torch
@@ -10,8 +9,28 @@ from torch import Tensor
 
 from torchdft import constants
 
-# TODO: Find better way to express the system.
-System = namedtuple("System", ["nelectrons", "charges", "centers"])
+
+class System:
+    """System class."""
+
+    def __init__(self, nelectrons=None, charges=None, centers=None):
+        self.nelectrons = nelectrons
+        self.charges = charges
+        self.centers = centers
+
+        assert nelectrons is not None, "nelectrons must be defined in System."
+        assert charges is not None, "charges must be defined in System."
+        assert centers is not None, "centers must be defined in System."
+
+    def get_occ(self, mode="KS"):
+        if mode == "KS":
+            n_occ = self.nelectrons // 2 + self.nelectrons % 2
+            occ = torch.ones(n_occ)
+            occ[: self.nelectrons // 2] += 1
+        elif mode == "OF":
+            occ = torch.tensor([self.nelectrons])
+
+        return occ
 
 
 def get_dx(grid: Tensor) -> float:

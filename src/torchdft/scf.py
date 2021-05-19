@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from typing import Tuple, Union
 
+import torch
 from torch import Tensor
 
 from .basis import Basis
@@ -13,17 +14,10 @@ from .utils import GeneralizedDiagonalizer
 __all__ = ["solve_scf"]
 
 
-def ks_iteration(
-    F: Tensor, S: GeneralizedDiagonalizer, n_electrons: int, mode: str = "KS"
-) -> Tuple[Tensor, Tensor]:
-    if mode == "KS":
-        n_occ = n_electrons // 2 + n_electrons % 2
-        occ = F.new_ones((n_occ,))  # orbital occupation numbers
-        occ[: n_electrons // 2] += 1
-    elif mode == "OF":
-        n_occ = 1
-        occ = F.new_tensor([n_electrons])
-    epsilon, C = S.eigh(F)
+def ks_iteration(F: Tensor, X: Tensor, occ: Tensor) -> Tuple[Tensor, Tensor]:
+    n_occ = occ.size(0)
+    epsilon, C = torch.linalg.eigh(X.t() @ F @ X)
+    C = X @ C
     epsilon, C = epsilon[:n_occ], C[:, :n_occ]
     P = (C * occ) @ C.t()
     energy_orb = (epsilon * occ).sum()
@@ -32,7 +26,7 @@ def ks_iteration(
 
 def solve_scf(
     basis: Basis,
-    n_electrons: int,
+    occ: Tensor,
     xc_functional: Functional,
     alpha: float = 0.5,
     max_iterations: int = 100,
@@ -44,14 +38,14 @@ def solve_scf(
     S, T, V_ext = basis.get_core_integrals()
     S = GeneralizedDiagonalizer(S)
     F = T + V_ext
-    P_in, energy_orb = ks_iteration(F, S, n_electrons, mode)
+    P_in, energy_orb = ks_iteration(F, S.X, occ)
     energy_prev = energy_orb + basis.E_nuc
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in range(max_iterations):
         V_H, V_xc, E_xc = basis.get_int_integrals(P_in, xc_functional)
         F = T + V_ext + V_H + V_xc
-        P_out, energy_orb = ks_iteration(F, S, n_electrons, mode)
+        P_out, energy_orb = ks_iteration(F, S.X, occ)
         energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc
         P_diff_norm = (P_out - P_in).norm()
         if print_iterations and i % print_iterations == 0:
