@@ -13,7 +13,9 @@ from torchdft import constants
 class System:
     """System class."""
 
-    def __init__(self, nelectrons=None, charges=None, centers=None):
+    def __init__(
+        self, nelectrons: int = None, charges: Tensor = None, centers: Tensor = None
+    ):
         self.nelectrons = nelectrons
         self.charges = charges
         self.centers = centers
@@ -22,7 +24,7 @@ class System:
         assert charges is not None, "charges must be defined in System."
         assert centers is not None, "centers must be defined in System."
 
-    def get_occ(self, mode="KS"):
+    def get_occ(self, mode: str = "KS"):
         if mode == "KS":
             n_occ = self.nelectrons // 2 + self.nelectrons % 2
             occ = torch.ones(n_occ)
