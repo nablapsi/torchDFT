@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
+from dataclasses import dataclass
 from typing import Tuple
 
 import torch
@@ -10,22 +11,21 @@ from torch import Tensor
 from torchdft import constants
 
 
+@dataclass
 class System:
-    """System class."""
+    """Represents an electronic system."""
 
-    def __init__(self, nelectrons: int, charges: Tensor, centers: Tensor):
-        self.nelectrons = nelectrons
-        self.charges = charges
-        self.centers = centers
+    n_electrons: int
+    charges: Tensor
+    centers: Tensor
 
-    def get_occ(self, mode: str = "KS") -> Tensor:
+    def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
-            n_occ = self.nelectrons // 2 + self.nelectrons % 2
+            n_occ = self.n_electrons // 2 + self.n_electrons % 2
             occ = torch.ones(n_occ)
-            occ[: self.nelectrons // 2] += 1
+            occ[: self.n_electrons // 2] += 1
         elif mode == "OF":
-            occ = torch.tensor([self.nelectrons])
-
+            occ = torch.tensor([self.n_electrons])
         return occ
 
 
