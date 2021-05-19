@@ -37,7 +37,7 @@ class SystemBatch:
         self.nbatch = len(systems)
         self.max_nelectrons = max([system.n_electrons for system in self.systems])
 
-    def get_occ(self, mode: str = "KS") -> Tensor:
+    def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
             n_occ = self.max_nelectrons // 2 + self.max_nelectrons % 2
             occ = torch.zeros(self.nbatch, n_occ)
