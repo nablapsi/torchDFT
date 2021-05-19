@@ -13,16 +13,10 @@ from torchdft import constants
 class System:
     """System class."""
 
-    def __init__(
-        self, nelectrons: int = 0, charges: Tensor = None, centers: Tensor = None
-    ):
+    def __init__(self, nelectrons: int, charges: Tensor, centers: Tensor):
         self.nelectrons = nelectrons
         self.charges = charges
         self.centers = centers
-
-        assert nelectrons > 0, "nelectrons must be defined in System."
-        assert charges is not None, "charges must be defined in System."
-        assert centers is not None, "centers must be defined in System."
 
     def get_occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
