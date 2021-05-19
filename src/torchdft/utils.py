@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
 from dataclasses import dataclass
-from typing import Tuple
+from typing import List, Tuple
 
 import torch
 from torch import Tensor
@@ -26,6 +26,26 @@ class System:
             occ[: self.n_electrons // 2] += 1
         elif mode == "OF":
             occ = torch.tensor([self.n_electrons])
+        return occ
+
+
+class SystemBatch:
+    """Hold a batch of systems."""
+
+    def __init__(self, systems: List[System]):
+        self.systems = systems
+        self.nbatch = len(systems)
+        self.max_nelectrons = max([system.n_electrons for system in self.systems])
+
+    def get_occ(self, mode: str = "KS") -> Tensor:
+        if mode == "KS":
+            n_occ = self.max_nelectrons // 2 + self.max_nelectrons % 2
+            occ = torch.zeros(self.nbatch, n_occ)
+            for i, system in enumerate(self.systems):
+                socc = system.occ(mode="KS")
+                occ[i, : socc.size(0)] = socc
+        elif mode == "OF":
+            occ = torch.tensor([[system.n_electrons] for system in self.systems])
         return occ
 
 

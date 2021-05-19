@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Callable, Tuple
+from typing import Callable, List, Tuple
 
 import torch
 from torch import Tensor
@@ -9,7 +9,7 @@ from torch import Tensor
 from .basis import Basis
 from .density import Density
 from .functional import Functional
-from .utils import System, exp_coulomb, get_dx
+from .utils import System, SystemBatch, exp_coulomb, get_dx
 
 
 class GridBasis(Basis):
@@ -40,6 +40,62 @@ class GridBasis(Basis):
         self.v_ext = get_external_potential(
             self.system.charges, self.system.centers, self.grid, self.interaction_fn
         )
+        return S, T, self.dx * self.v_ext.diag_embed()
+
+    def get_int_integrals(
+        self, P: Tensor, xc_functional: Functional
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        density = Density(P.diag())
+        if xc_functional.requires_grad:
+            density.grad = self._get_density_gradient(density.value)
+
+        v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
+        E_xc, v_xc = get_XC_energy_potential(density, self.grid, xc_functional)
+        return self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc
+
+    def _get_density_gradient(self, density: Tensor) -> Tensor:
+        grad_operator = get_gradient(self.grid.size(0)) / self.dx
+        return grad_operator.mv(density)
+
+
+class BatchGridBasis(Basis):
+    """Basis of equidistant 1D grid for training purposes."""
+
+    def __init__(
+        self,
+        systembatch: SystemBatch,
+        grid: Tensor,
+        interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
+    ):
+        self.systembatch = systembatch
+        self.grid = grid
+        self.interaction_fn = interaction_fn
+        self.dx = get_dx(grid)
+        E_nuc = []
+        for system in self.systembatch.systems:
+            E_nuc.append(
+                (
+                    (system.charges[:, None] * system.charges)
+                    * interaction_fn(system.centers[:, None] - system.centers)
+                )
+                .triu(diagonal=1)
+                .sum()
+            )
+        self.E_nuc = torch.tensor(E_nuc)
+
+    def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
+        S = torch.full(
+            (self.systembatch.nbatch, len(self.grid)), self.dx, device=self.grid.device
+        ).diag_embed()
+        T = self.dx * get_kinetic_matrix(self.grid)
+        v_ext = []
+        for system in self.systembatch.systems:
+            v_ext.append(
+                get_external_potential(
+                    system.charges, system.centers, self.grid, self.interaction_fn
+                )
+            )
+        self.v_ext = torch.stack(v_ext)
         return S, T, self.dx * self.v_ext.diag_embed()
 
     def get_int_integrals(
