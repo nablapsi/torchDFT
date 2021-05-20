@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Callable, List, Tuple
+from typing import Callable, Tuple
 
 import torch
 from torch import Tensor
@@ -59,7 +59,7 @@ class GridBasis(Basis):
 
 
 class BatchGridBasis(Basis):
-    """Basis of equidistant 1D grid for training purposes."""
+    """Basis of equidistant 1D grid for batch of systems."""
 
     def __init__(
         self,
@@ -101,7 +101,7 @@ class BatchGridBasis(Basis):
     def get_int_integrals(
         self, P: Tensor, xc_functional: Functional
     ) -> Tuple[Tensor, Tensor, Tensor]:
-        density = Density(P.diag())
+        density = Density(torch.diagonal(P, dim1=1, dim2=2))
         if xc_functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
 
@@ -169,7 +169,7 @@ def get_hartree_energy(
     r1 = torch.vstack((grid,) * grid_dim)
     r2 = torch.swapdims(r1, 0, 1)
 
-    return 5e-1 * torch.sum(n1 * n2 * interaction_fn(r1 - r2)) * dx * dx
+    return 5e-1 * (n1 * n2 * interaction_fn(r1 - r2)).sum() * dx * dx
 
 
 def get_hartree_potential(
@@ -195,11 +195,11 @@ def get_hartree_potential(
     grid_dim = grid.size(0)
     dx = get_dx(grid)
 
-    n1 = torch.vstack((density,) * grid_dim)
+    n1 = torch.stack((density,) * grid_dim, dim=-2)
     r1 = torch.vstack((grid,) * grid_dim)
     r2 = torch.swapdims(r1, 0, 1)
 
-    return torch.sum(n1 * interaction_fn(r1 - r2), dim=1) * dx
+    return (n1 * interaction_fn(r1 - r2)).sum(-1) * dx
 
 
 def get_external_potential_energy(
@@ -264,7 +264,7 @@ def get_XC_energy(density: Density, grid: Tensor, xc: Functional) -> Tensor:
     """Evaluate XC energy."""
     dx = get_dx(grid)
 
-    return torch.dot(xc(density), density.value) * dx
+    return (xc(density) * density.value).sum(-1) * dx
 
 
 def get_XC_energy_potential(
@@ -275,6 +275,6 @@ def get_XC_energy_potential(
     density.value = density.value.requires_grad_()
     dx = get_dx(grid)
     E_xc = get_XC_energy(density, grid, xc)
-    E_xc.backward()
+    (E_xc).sum().backward()
 
     return E_xc.detach(), density.value.grad / dx
