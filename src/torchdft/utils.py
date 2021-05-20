@@ -22,10 +22,10 @@ class System:
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
             n_occ = self.n_electrons // 2 + self.n_electrons % 2
-            occ = torch.ones(n_occ)
+            occ = self.centers.new_ones([n_occ])
             occ[: self.n_electrons // 2] += 1
         elif mode == "OF":
-            occ = torch.tensor([self.n_electrons])
+            occ = self.centers.new_tensor([self.n_electrons])
         return occ
 
 
@@ -40,12 +40,14 @@ class SystemBatch:
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
             n_occ = self.max_nelectrons // 2 + self.max_nelectrons % 2
-            occ = torch.zeros(self.nbatch, n_occ)
+            occ = self.systems[0].centers.new_zeros(self.nbatch, n_occ)
             for i, system in enumerate(self.systems):
                 socc = system.occ(mode="KS")
                 occ[i, : socc.size(0)] = socc
         elif mode == "OF":
-            occ = torch.tensor([[system.n_electrons] for system in self.systems])
+            occ = self.systems[0].centers.new_tensor(
+                [[system.n_electrons] for system in self.systems]
+            )
         return occ
 
 
