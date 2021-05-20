@@ -14,7 +14,7 @@ readme = "README.md"
 packages = [
     { include = "torchdft", from = "src" },
 ]
-repository = "https://github.com/pablomazo/torchdft"
+repository = "https://github.com/nablapsi/torchDFT"
 license = "MPL-2.0"
 classifiers = [
     "Development Status :: 1 - Planning",
@@ -30,7 +30,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.8"
-torch = "^1.8"
+torch = {git = "https://github.com/pytorch/pytorch.git", tag="1.9.0-rc1"}
 pyscf = { version = "^1.7.6", optional = true }
 
 [tool.poetry.extras]
