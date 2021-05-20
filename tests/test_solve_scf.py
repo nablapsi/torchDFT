@@ -92,14 +92,15 @@ def test_batched_scf():
     # Make two KS iterations:
     P_list, E_list = [], []
     for i, grid in enumerate(gridbasis):
+        occ = systems[i].occ("KS")
         S, T, Vext = grid.get_core_integrals()
         S = GeneralizedDiagonalizer(S)
         F = T + Vext
-        P, E = ks_iteration(F, S.X, systems[i].occ())
+        P, E = ks_iteration(F, S.X, occ)
 
         V_H, V_xc, E_xc = grid.get_int_integrals(P, Lda1d())
         F = T + Vext + V_H + V_xc
-        P, E = ks_iteration(F, S.X, systems[i].occ())
+        P, E = ks_iteration(F, S.X, occ)
 
         P_list.append(P)
         E_list.append(E)
@@ -108,14 +109,15 @@ def test_batched_scf():
     batch_ks_iteration = torch.vmap(ks_iteration, in_dims=(0, 0, 0))
 
     # Make two KS iterations with the batched version:
+    occ = systembatch.occ("KS")
     Sb, T, Vext = batchgrid.get_core_integrals()
     X = torch.stack([GeneralizedDiagonalizer(S_i).X for S_i in Sb])
     F = T + Vext
-    P, E = batch_ks_iteration(F, X, systembatch.occ())
+    P, E = batch_ks_iteration(F, X, occ)
 
     V_H, V_xc, E_xc = batchgrid.get_int_integrals(P, Lda1d())
     F = T + Vext + V_H + V_xc
-    P, E = batch_ks_iteration(F, X, systembatch.occ())
+    P, E = batch_ks_iteration(F, X, occ)
 
     for i in range(systembatch.nbatch):
         assert_allclose(P_list[i], P[i])
@@ -157,14 +159,15 @@ def test_batched__of_scf():
     # Make two KS iterations:
     P_list, E_list = [], []
     for i, grid in enumerate(gridbasis):
+        occ = systems[i].occ("OF")
         S, T, Vext = grid.get_core_integrals()
         S = GeneralizedDiagonalizer(S)
         F = T + Vext
-        P, E = ks_iteration(F, S.X, systems[i].occ("OF"))
+        P, E = ks_iteration(F, S.X, occ)
 
         V_H, V_xc, E_xc = grid.get_int_integrals(P, Lda1d())
         F = T + Vext + V_H + V_xc
-        P, E = ks_iteration(F, S.X, systems[i].occ("OF"))
+        P, E = ks_iteration(F, S.X, occ)
 
         P_list.append(P)
         E_list.append(E)
@@ -173,14 +176,15 @@ def test_batched__of_scf():
     batch_ks_iteration = torch.vmap(ks_iteration, in_dims=(0, 0, 0))
 
     # Make two KS iterations with the batched version:
+    occ = systembatch.occ("OF")
     Sb, T, Vext = batchgrid.get_core_integrals()
     X = torch.stack([GeneralizedDiagonalizer(S_i).X for S_i in Sb])
     F = T + Vext
-    P, E = batch_ks_iteration(F, X, systembatch.occ("OF"))
+    P, E = batch_ks_iteration(F, X, occ)
 
     V_H, V_xc, E_xc = batchgrid.get_int_integrals(P, Lda1d())
     F = T + Vext + V_H + V_xc
-    P, E = batch_ks_iteration(F, X, systembatch.occ("OF"))
+    P, E = batch_ks_iteration(F, X, occ)
 
     for i in range(systembatch.nbatch):
         assert_allclose(P_list[i], P[i])
