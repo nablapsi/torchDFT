@@ -124,7 +124,7 @@ def test_batched_scf():
         assert_allclose(E_list[i], E[i])
 
 
-def test_batched__of_scf():
+def test_batched_of_scf():
     def get_chain(n, R):
         chain = torch.zeros(n)
         for i in range(n):
