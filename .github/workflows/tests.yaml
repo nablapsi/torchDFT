@@ -31,13 +31,15 @@ jobs:
           path: |
             ${{ env.VIRTUAL_ENV }}/bin
             ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-1
       - name: Install dependencies
         run: pip install -U poetry-dynamic-versioning pytest coverage
       - name: Build
         run: poetry build
       - name: Install
-        run: pip install -U torchdft[3d] --pre -f ./dist
+        run: |
+          pip install -U torchdft[3d] --pre -f ./dist
+          pip install -U "torch==1.9.*" --pre -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
       - name: Test
         run: coverage run -m pytest
       - name: Upload to Codecov
