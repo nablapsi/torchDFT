@@ -35,19 +35,35 @@ class SystemBatch:
     def __init__(self, systems: List[System]):
         self.systems = systems
         self.nbatch = len(systems)
-        self.max_nelectrons = max([system.n_electrons for system in self.systems])
+        self.max_centers = 0
+        self.n_electrons = []
+        for system in systems:
+            center_dim = system.centers.shape[0]
+            if center_dim > self.max_centers:
+                self.max_centers = center_dim
+
+            self.n_electrons.append(system.n_electrons)
+
+        self.centers = self.systems[0].centers.new_zeros(self.nbatch, self.max_centers)
+        self.charges = self.systems[0].centers.new_zeros(self.nbatch, self.max_centers)
+        self.n_electrons = self.systems[0].centers.new_tensor(
+            self.n_electrons, dtype=torch.uint8
+        )
+
+        for i, system in enumerate(systems):
+            self.centers[i, : system.centers.shape[0]] = system.centers
+            self.charges[i, : system.centers.shape[0]] = system.charges
 
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
-            n_occ = self.max_nelectrons // 2 + self.max_nelectrons % 2
-            occ = self.systems[0].centers.new_zeros(self.nbatch, n_occ)
-            for i, system in enumerate(self.systems):
-                socc = system.occ(mode="KS")
-                occ[i, : socc.size(0)] = socc
+            double_occ = self.n_electrons.div(2, rounding_mode="floor")
+            n_occ = double_occ + self.n_electrons % 2
+            occ = self.centers.new_zeros(self.nbatch, n_occ.max().item())
+            for i in range(self.nbatch):
+                occ[i, : n_occ[i]] = 1
+                occ[i, : double_occ[i]] += 1
         elif mode == "OF":
-            occ = self.systems[0].centers.new_tensor(
-                [[system.n_electrons] for system in self.systems]
-            )
+            occ = self.n_electrons[:, None]
         return occ
 
 

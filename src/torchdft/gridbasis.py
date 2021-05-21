@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -17,7 +17,7 @@ class GridBasis(Basis):
 
     def __init__(
         self,
-        system: System,
+        system: Union[System, SystemBatch],
         grid: Tensor,
         interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
     ):
@@ -25,83 +25,29 @@ class GridBasis(Basis):
         self.grid = grid
         self.interaction_fn = interaction_fn
         self.dx = get_dx(grid)
+
+        c1 = torch.stack((system.charges,) * system.charges.shape[-1], dim=-2)
+        c2 = torch.swapdims(c1, -2, -1)
+        r1 = torch.stack((system.centers,) * system.centers.shape[-1], dim=-2)
+        r2 = torch.swapdims(r1, -2, -1)
+        # NOTE: interaction_fn must handle divergences at r = 0.
+        #       For a batch of systems this function WILL be evaluated at r = 0.
         self.E_nuc = (
-            (
-                (system.charges[:, None] * system.charges)
-                * interaction_fn(system.centers[:, None] - system.centers)
-            )
-            .triu(diagonal=1)
-            .sum()
+            ((c1 * c2) * interaction_fn(r1 - r2)).triu(diagonal=1).sum((-2, -1))
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
-        S = torch.full((len(self.grid),), self.dx, device=self.grid.device).diag_embed()
         T = self.dx * get_kinetic_matrix(self.grid)
         self.v_ext = get_external_potential(
             self.system.charges, self.system.centers, self.grid, self.interaction_fn
         )
+        S = torch.full_like(self.v_ext, self.dx, device=self.grid.device).diag_embed()
         return S, T, self.dx * self.v_ext.diag_embed()
 
     def get_int_integrals(
         self, P: Tensor, xc_functional: Functional
     ) -> Tuple[Tensor, Tensor, Tensor]:
-        density = Density(P.diag())
-        if xc_functional.requires_grad:
-            density.grad = self._get_density_gradient(density.value)
-
-        v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
-        E_xc, v_xc = get_XC_energy_potential(density, self.grid, xc_functional)
-        return self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc
-
-    def _get_density_gradient(self, density: Tensor) -> Tensor:
-        grad_operator = get_gradient(self.grid.size(0)) / self.dx
-        return grad_operator.mv(density)
-
-
-class BatchGridBasis(Basis):
-    """Basis of equidistant 1D grid for batch of systems."""
-
-    def __init__(
-        self,
-        systembatch: SystemBatch,
-        grid: Tensor,
-        interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
-    ):
-        self.systembatch = systembatch
-        self.grid = grid
-        self.interaction_fn = interaction_fn
-        self.dx = get_dx(grid)
-        E_nuc = []
-        for system in self.systembatch.systems:
-            E_nuc.append(
-                (
-                    (system.charges[:, None] * system.charges)
-                    * interaction_fn(system.centers[:, None] - system.centers)
-                )
-                .triu(diagonal=1)
-                .sum()
-            )
-        self.E_nuc = torch.tensor(E_nuc)
-
-    def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
-        S = torch.full(
-            (self.systembatch.nbatch, len(self.grid)), self.dx, device=self.grid.device
-        ).diag_embed()
-        T = self.dx * get_kinetic_matrix(self.grid)
-        v_ext = []
-        for system in self.systembatch.systems:
-            v_ext.append(
-                get_external_potential(
-                    system.charges, system.centers, self.grid, self.interaction_fn
-                )
-            )
-        self.v_ext = torch.stack(v_ext)
-        return S, T, self.dx * self.v_ext.diag_embed()
-
-    def get_int_integrals(
-        self, P: Tensor, xc_functional: Functional
-    ) -> Tuple[Tensor, Tensor, Tensor]:
-        density = Density(torch.diagonal(P, dim1=1, dim2=2))
+        density = Density(torch.diagonal(P, dim1=-2, dim2=-1))
         if xc_functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
 
@@ -164,12 +110,12 @@ def get_hartree_energy(
     grid_dim = grid.size(0)
     dx = get_dx(grid)
 
-    n1 = torch.vstack((density,) * grid_dim)
-    n2 = torch.swapdims(n1, 0, 1)
-    r1 = torch.vstack((grid,) * grid_dim)
-    r2 = torch.swapdims(r1, 0, 1)
+    n1 = torch.stack((density,) * grid_dim, dim=-2)
+    n2 = torch.swapdims(n1, -2, -1)
+    r1 = torch.stack((grid,) * grid_dim, dim=-2)
+    r2 = torch.swapdims(r1, -2, -1)
 
-    return 5e-1 * (n1 * n2 * interaction_fn(r1 - r2)).sum() * dx * dx
+    return 5e-1 * (n1 * n2 * interaction_fn(r1 - r2)).sum((-2, -1)) * dx * dx
 
 
 def get_hartree_potential(
@@ -196,8 +142,8 @@ def get_hartree_potential(
     dx = get_dx(grid)
 
     n1 = torch.stack((density,) * grid_dim, dim=-2)
-    r1 = torch.vstack((grid,) * grid_dim)
-    r2 = torch.swapdims(r1, 0, 1)
+    r1 = torch.stack((grid,) * grid_dim, dim=-2)
+    r2 = torch.swapdims(r1, -2, -1)
 
     return (n1 * interaction_fn(r1 - r2)).sum(-1) * dx
 
@@ -222,7 +168,7 @@ def get_external_potential_energy(
     """
 
     dx = get_dx(grid)
-    return torch.dot(external_potential, density) * dx
+    return (external_potential * density).sum(-1) * dx
 
 
 def get_external_potential(
@@ -250,14 +196,14 @@ def get_external_potential(
           energy at each spatial point.
     """
 
-    ncharges = charges.size(0)
+    ncharges = charges.size(-1)
     grid_dim = grid.size(0)
 
-    r1 = torch.vstack((grid,) * ncharges)
-    r2 = torch.swapdims(torch.vstack((centers,) * grid_dim), 0, 1)
-    c1 = torch.swapdims(torch.vstack((charges,) * grid_dim), 0, 1)
+    r1 = torch.stack((grid,) * ncharges, dim=-2)
+    r2 = torch.swapdims(torch.stack((centers,) * grid_dim, dim=-2), -2, -1)
+    c1 = torch.swapdims(torch.stack((charges,) * grid_dim, dim=-2), -2, -1)
 
-    return -torch.sum(c1 * interaction_fn(r1 - r2), dim=0)
+    return -(c1 * interaction_fn(r1 - r2)).sum(-2)
 
 
 def get_XC_energy(density: Density, grid: Tensor, xc: Functional) -> Tensor:

@@ -3,7 +3,7 @@ from pyscf import dft, gto
 from torch.testing import assert_allclose
 
 from torchdft.gaussbasis import GaussianBasis
-from torchdft.gridbasis import BatchGridBasis, GridBasis
+from torchdft.gridbasis import GridBasis
 from torchdft.scf import ks_iteration, solve_scf
 from torchdft.utils import GeneralizedDiagonalizer, System, SystemBatch
 from torchdft.xc_functionals import PBE, Lda1d, LdaPw92
@@ -87,7 +87,7 @@ def test_batched_scf():
 
     # Get batched system and grids.
     systembatch = SystemBatch(systems)
-    batchgrid = BatchGridBasis(systembatch, grid)
+    batchgrid = GridBasis(systembatch, grid)
 
     # Make two KS iterations:
     P_list, E_list = [], []
@@ -154,7 +154,7 @@ def test_batched_of_scf():
 
     # Get batched system and grids.
     systembatch = SystemBatch(systems)
-    batchgrid = BatchGridBasis(systembatch, grid)
+    batchgrid = GridBasis(systembatch, grid)
 
     # Make two KS iterations:
     P_list, E_list = [], []
