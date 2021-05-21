@@ -57,10 +57,10 @@ class SystemBatch:
         if mode == "KS":
             double_occ = self.n_electrons.div(2, rounding_mode="floor")
             n_occ = double_occ + self.n_electrons % 2
-            occ = self.n_electrons.new_zeros(self.nbatch, n_occ.max().item())
+            occ = self.n_electrons.new_zeros(self.nbatch, int(n_occ.max().item()))
             for i in range(self.nbatch):
-                occ[i, : n_occ[i]] = 1
-                occ[i, : double_occ[i]] += 1
+                occ[i, : int(n_occ[i])] = 1
+                occ[i, : int(double_occ[i])] += 1
         elif mode == "OF":
             occ = self.n_electrons[:, None]
         return occ
