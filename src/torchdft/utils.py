@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
 from dataclasses import dataclass
-from typing import Tuple
+from typing import List, Tuple
 
 import torch
 from torch import Tensor
@@ -22,10 +22,47 @@ class System:
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
             n_occ = self.n_electrons // 2 + self.n_electrons % 2
-            occ = torch.ones(n_occ)
+            occ = self.centers.new_ones([n_occ])
             occ[: self.n_electrons // 2] += 1
         elif mode == "OF":
-            occ = torch.tensor([self.n_electrons])
+            occ = self.centers.new_tensor([self.n_electrons])
+        return occ
+
+
+class SystemBatch:
+    """Hold a batch of systems."""
+
+    def __init__(self, systems: List[System]):
+        self.systems = systems
+        self.nbatch = len(systems)
+        self.max_centers = 0
+        self.n_electrons = self.systems[0].centers.new_zeros(
+            self.nbatch, dtype=torch.uint8
+        )
+        for i, system in enumerate(systems):
+            center_dim = system.centers.shape[0]
+            if center_dim > self.max_centers:
+                self.max_centers = center_dim
+
+            self.n_electrons[i] = system.n_electrons
+
+        self.centers = self.systems[0].centers.new_zeros(self.nbatch, self.max_centers)
+        self.charges = self.centers.new_zeros(self.nbatch, self.max_centers)
+
+        for i, system in enumerate(systems):
+            self.centers[i, : system.centers.shape[0]] = system.centers
+            self.charges[i, : system.centers.shape[0]] = system.charges
+
+    def occ(self, mode: str = "KS") -> Tensor:
+        if mode == "KS":
+            double_occ = self.n_electrons.div(2, rounding_mode="floor")
+            n_occ = double_occ + self.n_electrons % 2
+            occ = self.n_electrons.new_zeros(self.nbatch, int(n_occ.max().item()))
+            for i in range(self.nbatch):
+                occ[i, : int(n_occ[i])] = 1
+                occ[i, : int(double_occ[i])] += 1
+        elif mode == "OF":
+            occ = self.n_electrons[:, None]
         return occ
 
 

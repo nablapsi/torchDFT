@@ -68,9 +68,10 @@ jobs:
             poetry.lock
             ${{ env.VIRTUAL_ENV }}/bin
             ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-1
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-2
       - name: Install dependencies
         run: |
           poetry install --no-dev
+          pip install -U "torch==1.9.*" --pre -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
           pip install mypy
       - run: mypy
