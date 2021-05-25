@@ -59,6 +59,11 @@ class GridBasis(Basis):
         grad_operator = get_gradient(self.grid.size(0)) / self.dx
         return grad_operator.mv(density)
 
+    def density_rms(self, P: Tensor) -> Tensor:
+        dx = get_dx(self.grid)
+        density = torch.diagonal(P, dim1=-2, dim2=-1)
+        return density.pow(2).sum(dim=-1) * dx
+
 
 def get_gradient(grid_dim: int, device: torch.device = None) -> Tensor:
     """Finite difference approximation of gradient operator."""

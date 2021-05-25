@@ -23,3 +23,7 @@ class Basis:
         self, P: Tensor, xc_functional: Functional
     ) -> Tuple[Tensor, Tensor, Tensor]:
         pass
+
+    @abstractmethod
+    def density_rms(self, P: Tensor) -> Tensor:
+        pass

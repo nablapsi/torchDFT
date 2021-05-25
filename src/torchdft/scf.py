@@ -28,7 +28,7 @@ def solve_scf(
     xc_functional: Functional,
     alpha: float = 0.5,
     max_iterations: int = 100,
-    dm_threshold: float = 1e-3,
+    density_threshold: float = 1e-5,
     print_iterations: Union[bool, int] = False,
     mode: str = "KS",
 ) -> Tuple[Tensor, Tensor]:
@@ -45,12 +45,12 @@ def solve_scf(
         F = T + V_ext + V_H + V_xc
         P_out, energy_orb = ks_iteration(F, S.X, occ)
         energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc
-        P_diff_norm = (P_out - P_in).norm()
+        density_diff = basis.density_rms(P_out - P_in)
         if print_iterations and i % print_iterations == 0:
             print(
-                "%3i   %10.7f   %10.7f   %3.4e" % (i, energy_prev, energy, P_diff_norm)
+                "%3i   %10.7f   %10.7f   %3.4e" % (i, energy_prev, energy, density_diff)
             )
-        if P_diff_norm < dm_threshold:
+        if density_diff < density_threshold:
             break
         P_in = P_in + alpha * (P_out - P_in)
         energy_prev = energy
