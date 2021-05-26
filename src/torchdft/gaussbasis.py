@@ -16,19 +16,25 @@ from .functional import Functional
 class GaussianBasis(Basis):
     """Gaussian basis with radial grids from PySCF."""
 
+    S: Tensor
+    T: Tensor
+    V_ext: Tensor
+    phi: Tensor
+
     def __init__(self, mol: Mole):
+        super().__init__()
         self.mol = mol
-        self.S = torch.from_numpy(self.mol.intor("int1e_ovlp"))
-        self.T = torch.from_numpy(self.mol.intor("int1e_kin"))
-        self.V_ext = torch.from_numpy(self.mol.intor("int1e_nuc"))
-        self.eri = torch.from_numpy(mol.intor("int2e"))
+        self.register_buffer("S", torch.from_numpy(self.mol.intor("int1e_ovlp")))
+        self.register_buffer("T", torch.from_numpy(self.mol.intor("int1e_kin")))
+        self.register_buffer("V_ext", torch.from_numpy(self.mol.intor("int1e_nuc")))
+        self.register_buffer("eri", torch.from_numpy(mol.intor("int2e")))
         self.grid = dft.gen_grid.Grids(mol)
         self.grid.build()
-        self.grid_weights = torch.from_numpy(self.grid.weights)
+        self.register_buffer("grid_weights", torch.from_numpy(self.grid.weights))
         phi = torch.from_numpy(dft.numint.eval_ao(mol, self.grid.coords, deriv=1))
-        self.phi = phi[0]
-        self.grad_phi = phi[1:4]
-        self.E_nuc = torch.tensor(mol.energy_nuc())
+        self.register_buffer("phi", phi[0])
+        self.register_buffer("grad_phi", phi[1:4])
+        self.register_buffer("E_nuc", torch.tensor(mol.energy_nuc()))
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self.S, self.T, self.V_ext

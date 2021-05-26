@@ -4,12 +4,12 @@
 from abc import abstractmethod
 from typing import Tuple
 
-from torch import Tensor
+from torch import Tensor, nn
 
 from .functional import Functional
 
 
-class Basis:
+class Basis(nn.Module):
     """Base class representing an abstract basis."""
 
     E_nuc: Tensor
