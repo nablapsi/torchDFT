@@ -26,14 +26,15 @@ class GridBasis(Basis):
         self.interaction_fn = interaction_fn
         self.dx = get_dx(grid)
 
-        c1 = torch.stack((system.charges,) * system.charges.shape[-1], dim=-2)
-        c2 = torch.swapdims(c1, -2, -1)
-        r1 = torch.stack((system.centers,) * system.centers.shape[-1], dim=-2)
-        r2 = torch.swapdims(r1, -2, -1)
-        # NOTE: interaction_fn must handle divergences at r = 0.
-        #       For a batch of systems this function WILL be evaluated at r = 0.
         self.E_nuc = (
-            ((c1 * c2) * interaction_fn(r1 - r2)).triu(diagonal=1).sum((-2, -1))
+            (
+                (system.charges[..., None, :] * system.charges[..., None])
+                * interaction_fn(
+                    system.centers[..., None, :] - system.centers[..., None]
+                )
+            )
+            .triu(diagonal=1)
+            .sum()
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
@@ -112,15 +113,18 @@ def get_hartree_energy(
         Float. Hartree energy.
     """
 
-    grid_dim = grid.size(0)
     dx = get_dx(grid)
 
-    n1 = torch.stack((density,) * grid_dim, dim=-2)
-    n2 = torch.swapdims(n1, -2, -1)
-    r1 = torch.stack((grid,) * grid_dim, dim=-2)
-    r2 = torch.swapdims(r1, -2, -1)
-
-    return 5e-1 * (n1 * n2 * interaction_fn(r1 - r2)).sum((-2, -1)) * dx * dx
+    return (
+        5e-1
+        * (
+            density[..., None, :]
+            * density[..., None]
+            * interaction_fn(grid[:, None] - grid)
+        ).sum((-2, -1))
+        * dx
+        * dx
+    )
 
 
 def get_hartree_potential(
@@ -143,14 +147,11 @@ def get_hartree_potential(
           energy at each spatial point.
     """
 
-    grid_dim = grid.size(0)
     dx = get_dx(grid)
 
-    n1 = torch.stack((density,) * grid_dim, dim=-2)
-    r1 = torch.stack((grid,) * grid_dim, dim=-2)
-    r2 = torch.swapdims(r1, -2, -1)
-
-    return (n1 * interaction_fn(r1 - r2)).sum(-1) * dx
+    return (
+        density[..., None, :] * interaction_fn(grid[..., None, :] - grid[..., None])
+    ).sum(-1) * dx
 
 
 def get_external_potential_energy(
@@ -201,14 +202,9 @@ def get_external_potential(
           energy at each spatial point.
     """
 
-    ncharges = charges.size(-1)
-    grid_dim = grid.size(0)
-
-    r1 = torch.stack((grid,) * ncharges, dim=-2)
-    r2 = torch.swapdims(torch.stack((centers,) * grid_dim, dim=-2), -2, -1)
-    c1 = torch.swapdims(torch.stack((charges,) * grid_dim, dim=-2), -2, -1)
-
-    return -(c1 * interaction_fn(r1 - r2)).sum(-2)
+    return -(
+        charges[..., None] * interaction_fn(grid[..., None, :] - centers[..., None])
+    ).sum(-2)
 
 
 def get_XC_energy(density: Density, grid: Tensor, xc: Functional) -> Tensor:
