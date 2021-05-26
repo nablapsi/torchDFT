@@ -21,7 +21,7 @@ class GaussianBasis(Basis):
     V_ext: Tensor
     phi: Tensor
 
-    def __init__(self, mol: Mole):
+    def __init__(self, mol: Mole, **kwargs: object):
         super().__init__()
         self.mol = mol
         self.register_buffer("S", torch.from_numpy(self.mol.intor("int1e_ovlp")))
@@ -29,6 +29,8 @@ class GaussianBasis(Basis):
         self.register_buffer("V_ext", torch.from_numpy(self.mol.intor("int1e_nuc")))
         self.register_buffer("eri", torch.from_numpy(mol.intor("int2e")))
         self.grid = dft.gen_grid.Grids(mol)
+        for k, v in kwargs.items():
+            setattr(self.grid, k, v)
         self.grid.build()
         self.register_buffer("grid_weights", torch.from_numpy(self.grid.weights))
         phi = torch.from_numpy(dft.numint.eval_ao(mol, self.grid.coords, deriv=1))
