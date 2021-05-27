@@ -66,7 +66,7 @@ class SystemBatch:
         return occ
 
 
-def get_dx(grid: Tensor) -> float:
+def get_dx(grid: Tensor) -> Tensor:
     """Get grid spacing.
 
     Given a grid as a 1D array returns the spacing between grid points.
@@ -77,7 +77,7 @@ def get_dx(grid: Tensor) -> float:
         Float.
     """
     grid_dim = grid.size(0)
-    return ((torch.amax(grid) - torch.amin(grid)) / (grid_dim - 1))
+    return (torch.amax(grid) - torch.amin(grid)) / (grid_dim - 1)
 
 
 def gaussian(x: Tensor, mean: float, sigma: float) -> Tensor:
