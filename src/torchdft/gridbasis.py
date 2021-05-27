@@ -34,7 +34,7 @@ class GridBasis(Basis):
                 )
             )
             .triu(diagonal=1)
-            .sum()
+            .sum((-2, -1))
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:

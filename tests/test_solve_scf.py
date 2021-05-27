@@ -57,7 +57,7 @@ def test_h2_gauss_pbe():
     assert_allclose(energy, energy_true)
 
 
-def test_batched_scf():
+def test_batched_ks_iteration():
     def get_chain(n, R):
         chain = torch.zeros(n)
         for i in range(n):
@@ -89,39 +89,40 @@ def test_batched_scf():
     systembatch = SystemBatch(systems)
     batchgrid = GridBasis(systembatch, grid)
 
-    # Make two KS iterations:
-    P_list, E_list = [], []
-    for i, grid in enumerate(gridbasis):
-        occ = systems[i].occ("KS")
-        S, T, Vext = grid.get_core_integrals()
-        S = GeneralizedDiagonalizer(S)
+    for mode in ["KS", "OF"]:
+        # Make two KS iterations:
+        P_list, E_list = [], []
+        for i, basis in enumerate(gridbasis):
+            occ = systems[i].occ(mode)
+            S, T, Vext = basis.get_core_integrals()
+            S = GeneralizedDiagonalizer(S)
+            F = T + Vext
+            P, E = ks_iteration(F, S.X, occ)
+
+            V_H, V_xc, E_xc = basis.get_int_integrals(P, Lda1d())
+            F = T + Vext + V_H + V_xc
+            P, E = ks_iteration(F, S.X, occ)
+
+            P_list.append(P)
+            E_list.append(E)
+
+        # Make two KS iterations with the batched version:
+        occ = systembatch.occ(mode)
+        Sb, T, Vext = batchgrid.get_core_integrals()
+        Sb = GeneralizedDiagonalizer(Sb)
         F = T + Vext
-        P, E = ks_iteration(F, S.X, occ)
+        P, E = ks_iteration(F, Sb.X, occ)
 
-        V_H, V_xc, E_xc = grid.get_int_integrals(P, Lda1d())
+        V_H, V_xc, E_xc = batchgrid.get_int_integrals(P, Lda1d())
         F = T + Vext + V_H + V_xc
-        P, E = ks_iteration(F, S.X, occ)
+        P, E = ks_iteration(F, Sb.X, occ)
 
-        P_list.append(P)
-        E_list.append(E)
-
-    # Make two KS iterations with the batched version:
-    occ = systembatch.occ("KS")
-    Sb, T, Vext = batchgrid.get_core_integrals()
-    Sb = GeneralizedDiagonalizer(Sb)
-    F = T + Vext
-    P, E = ks_iteration(F, Sb.X, occ)
-
-    V_H, V_xc, E_xc = batchgrid.get_int_integrals(P, Lda1d())
-    F = T + Vext + V_H + V_xc
-    P, E = ks_iteration(F, Sb.X, occ)
-
-    for i in range(systembatch.nbatch):
-        assert_allclose(P_list[i], P[i])
-        assert_allclose(E_list[i], E[i])
+        for i in range(systembatch.nbatch):
+            assert_allclose(P_list[i], P[i])
+            assert_allclose(E_list[i], E[i])
 
 
-def test_batched_of_scf():
+def test_batched_solve_scf():
     def get_chain(n, R):
         chain = torch.zeros(n)
         for i in range(n):
@@ -153,33 +154,19 @@ def test_batched_of_scf():
     systembatch = SystemBatch(systems)
     batchgrid = GridBasis(systembatch, grid)
 
-    # Make two KS iterations:
-    P_list, E_list = [], []
-    for i, grid in enumerate(gridbasis):
-        occ = systems[i].occ("OF")
-        S, T, Vext = grid.get_core_integrals()
-        S = GeneralizedDiagonalizer(S)
-        F = T + Vext
-        P, E = ks_iteration(F, S.X, occ)
+    for mode in ["KS", "OF"]:
+        P_list, E_list = [], []
+        for i, basis in enumerate(gridbasis):
+            occ = systems[i].occ(mode)
+            P, E = solve_scf(basis, occ, Lda1d(), max_iterations=1, silent=True)
 
-        V_H, V_xc, E_xc = grid.get_int_integrals(P, Lda1d())
-        F = T + Vext + V_H + V_xc
-        P, E = ks_iteration(F, S.X, occ)
+            P_list.append(P)
+            E_list.append(E)
 
-        P_list.append(P)
-        E_list.append(E)
+        # Make two KS iterations with the batched version:
+        occ = systembatch.occ(mode)
+        P, E = solve_scf(batchgrid, occ, Lda1d(), max_iterations=1, silent=True)
 
-    # Make two KS iterations with the batched version:
-    occ = systembatch.occ("OF")
-    Sb, T, Vext = batchgrid.get_core_integrals()
-    Sb = GeneralizedDiagonalizer(Sb)
-    F = T + Vext
-    P, E = ks_iteration(F, Sb.X, occ)
-
-    V_H, V_xc, E_xc = batchgrid.get_int_integrals(P, Lda1d())
-    F = T + Vext + V_H + V_xc
-    P, E = ks_iteration(F, Sb.X, occ)
-
-    for i in range(systembatch.nbatch):
-        assert_allclose(P_list[i], P[i])
-        assert_allclose(E_list[i], E[i])
+        for i in range(systembatch.nbatch):
+            assert_allclose(P_list[i], P[i])
+            assert_allclose(E_list[i], E[i])

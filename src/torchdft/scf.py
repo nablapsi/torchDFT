@@ -31,6 +31,7 @@ def solve_scf(
     density_threshold: float = 1e-5,
     print_iterations: Union[bool, int] = False,
     mode: str = "KS",
+    silent: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
     S, T, V_ext = basis.get_core_integrals()
@@ -38,22 +39,26 @@ def solve_scf(
     F = T + V_ext
     P_in, energy_orb = ks_iteration(F, S.X, occ)
     energy_prev = energy_orb + basis.E_nuc
+    print_iterations = print_iterations and len(P_in.shape) == 2
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in range(max_iterations):
         V_H, V_xc, E_xc = basis.get_int_integrals(P_in, xc_functional)
         F = T + V_ext + V_H + V_xc
         P_out, energy_orb = ks_iteration(F, S.X, occ)
-        energy = energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum() + basis.E_nuc
+        energy = (
+            energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum((-2, -1)) + basis.E_nuc
+        )
         density_diff = basis.density_rms(P_out - P_in)
         if print_iterations and i % print_iterations == 0:
             print(
                 "%3i   %10.7f   %10.7f   %3.4e" % (i, energy_prev, energy, density_diff)
             )
-        if density_diff < density_threshold:
+        if (density_diff < density_threshold).all():
             break
         P_in = P_in + alpha * (P_out - P_in)
         energy_prev = energy
     else:
-        raise SCFNotConverged()
+        if not silent:
+            raise SCFNotConverged()
     return P_out, energy
