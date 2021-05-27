@@ -119,7 +119,7 @@ class GeneralizedDiagonalizer:
 
     @staticmethod
     def eigh(A: Tensor, X: Tensor) -> Tuple[Tensor, Tensor]:
-        w, V = torch.linalg.eigh(X.t() @ A @ X)
+        w, V = torch.linalg.eigh(X.transpose(-2, -1) @ A @ X)
         V = X @ V
         return w, V
 

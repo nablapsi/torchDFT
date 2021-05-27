@@ -16,9 +16,9 @@ __all__ = ["solve_scf"]
 def ks_iteration(F: Tensor, X: Tensor, occ: Tensor) -> Tuple[Tensor, Tensor]:
     n_occ = occ.shape[-1]
     epsilon, C = GeneralizedDiagonalizer.eigh(F, X)
-    epsilon, C = epsilon[:n_occ], C[:, :n_occ]
-    P = (C * occ) @ C.t()
-    energy_orb = (epsilon * occ).sum()
+    epsilon, C = epsilon[..., :n_occ], C[..., :n_occ]
+    P = (C * occ[..., None, :]) @ C.transpose(-2, -1)
+    energy_orb = (epsilon * occ).sum(-1)
     return P, energy_orb
 
 
