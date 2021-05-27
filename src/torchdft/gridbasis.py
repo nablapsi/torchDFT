@@ -42,7 +42,9 @@ class GridBasis(Basis):
         self.v_ext = get_external_potential(
             self.system.charges, self.system.centers, self.grid, self.interaction_fn
         )
-        S = torch.full_like(self.v_ext, self.dx, device=self.grid.device).diag_embed()
+        S = torch.full_like(
+            self.v_ext, self.dx.item(), device=self.grid.device
+        ).diag_embed()
         return S, T, self.dx * self.v_ext.diag_embed()
 
     def get_int_integrals(
