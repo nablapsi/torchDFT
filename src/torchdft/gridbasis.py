@@ -59,7 +59,9 @@ class GridBasis(Basis):
         return self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:
-        grad_operator = get_gradient(self.grid.size(0)) / self.dx
+        grad_operator = (
+            get_gradient(self.grid.size(0), device=self.grid.device) / self.dx
+        )
         return grad_operator.mv(density)
 
     def density_rms(self, P: Tensor) -> Tensor:
