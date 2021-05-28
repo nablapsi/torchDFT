@@ -18,6 +18,7 @@ class System:
     n_electrons: int
     charges: Tensor
     centers: Tensor
+    grid: Tensor
 
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
@@ -34,6 +35,9 @@ class SystemBatch:
 
     def __init__(self, systems: List[System]):
         self.systems = systems
+        self.grid = self.systems[0].grid
+        # Make sure all systems share the same grid.
+        assert [system.grid == self.grid for system in self.systems]
         self.nbatch = len(systems)
         self.max_centers = 0
         self.n_electrons = self.systems[0].centers.new_zeros(

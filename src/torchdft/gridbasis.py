@@ -18,13 +18,12 @@ class GridBasis(Basis):
     def __init__(
         self,
         system: Union[System, SystemBatch],
-        grid: Tensor,
         interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
     ):
         self.system = system
-        self.grid = grid
+        self.grid = self.system.grid
         self.interaction_fn = interaction_fn
-        self.dx = get_dx(grid)
+        self.dx = get_dx(self.grid)
 
         self.E_nuc = (
             (
@@ -153,9 +152,7 @@ def get_hartree_potential(
 
     dx = get_dx(grid)
 
-    return (
-        density[..., None, :] * interaction_fn(grid[..., None, :] - grid[..., None])
-    ).sum(-1) * dx
+    return (density[..., None, :] * interaction_fn(grid[:, None] - grid)).sum(-1) * dx
 
 
 def get_external_potential_energy(
@@ -206,9 +203,7 @@ def get_external_potential(
           energy at each spatial point.
     """
 
-    return -(
-        charges[..., None] * interaction_fn(grid[..., None, :] - centers[..., None])
-    ).sum(-2)
+    return -(charges[..., None] * interaction_fn(grid - centers[..., None])).sum(-2)
 
 
 def get_XC_energy(density: Density, grid: Tensor, xc: Functional) -> Tensor:

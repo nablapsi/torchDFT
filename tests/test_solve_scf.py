@@ -13,9 +13,9 @@ def test_h2():
     charges = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
     nelectrons = 2
-    H2 = System(nelectrons, charges, centers)
     grid = torch.arange(-10, 10, 0.1)
-    basis = GridBasis(H2, grid)
+    H2 = System(nelectrons, charges, centers, grid)
+    basis = GridBasis(H2)
     density, energy = solve_scf(basis, H2.occ(), Lda1d())
     assert_allclose(energy, -1.4045913)
 
@@ -24,9 +24,9 @@ def test_ks_of():
     charges = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
     nelectrons = 2
-    H2 = System(nelectrons, charges, centers)
     grid = torch.arange(-10, 10, 0.1)
-    basis = GridBasis(H2, grid)
+    H2 = System(nelectrons, charges, centers, grid)
+    basis = GridBasis(H2)
     density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d())
     density_of, energy_of = solve_scf(basis, H2.occ(mode="OF"), Lda1d())
     assert_allclose(density_ks, density_of)
@@ -73,21 +73,21 @@ def test_batched_ks_iteration():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(charges=charges, n_electrons=n, centers=centers)
+        system = System(charges=charges, n_electrons=n, centers=centers, grid=grid)
         systems.append(system)
-        gridbasis.append(GridBasis(system, grid))
+        gridbasis.append(GridBasis(system))
 
     n = 3
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(charges=charges, n_electrons=n, centers=centers)
+        system = System(charges=charges, n_electrons=n, centers=centers, grid=grid)
         systems.append(system)
-        gridbasis.append(GridBasis(system, grid))
+        gridbasis.append(GridBasis(system))
 
     # Get batched system and grids.
     systembatch = SystemBatch(systems)
-    batchgrid = GridBasis(systembatch, grid)
+    batchgrid = GridBasis(systembatch)
 
     for mode in ["KS", "OF"]:
         # Make two KS iterations:
@@ -138,21 +138,21 @@ def test_batched_solve_scf():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(charges=charges, n_electrons=n, centers=centers)
+        system = System(charges=charges, n_electrons=n, centers=centers, grid=grid)
         systems.append(system)
-        gridbasis.append(GridBasis(system, grid))
+        gridbasis.append(GridBasis(system))
 
     n = 3
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(charges=charges, n_electrons=n, centers=centers)
+        system = System(charges=charges, n_electrons=n, centers=centers, grid=grid)
         systems.append(system)
-        gridbasis.append(GridBasis(system, grid))
+        gridbasis.append(GridBasis(system))
 
     # Get batched system and grids.
     systembatch = SystemBatch(systems)
-    batchgrid = GridBasis(systembatch, grid)
+    batchgrid = GridBasis(systembatch)
 
     for mode in ["KS", "OF"]:
         P_list, E_list = [], []
