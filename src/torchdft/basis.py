@@ -27,3 +27,7 @@ class Basis:
     @abstractmethod
     def density_rms(self, P: Tensor) -> Tensor:
         pass
+
+    @abstractmethod
+    def _density(self, P: Tensor) -> Tensor:
+        pass
