@@ -49,7 +49,7 @@ class GridBasis(Basis):
     def get_int_integrals(
         self, P: Tensor, xc_functional: Functional
     ) -> Tuple[Tensor, Tensor, Tensor]:
-        density = Density(torch.diagonal(P, dim1=-2, dim2=-1))
+        density = Density(self._density(P))
         if xc_functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
 
@@ -67,6 +67,9 @@ class GridBasis(Basis):
         dx = get_dx(self.grid)
         density = torch.diagonal(P, dim1=-2, dim2=-1)
         return density.pow(2).sum(dim=-1) * dx
+
+    def _density(self, P: Tensor) -> Tensor:
+        return P.diagonal(dim1=-2, dim2=-1)
 
 
 def get_gradient(grid_dim: int, device: torch.device = None) -> Tensor:
