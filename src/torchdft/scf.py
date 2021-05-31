@@ -129,5 +129,5 @@ def solve_scf(  # noqa: C901 TODO too complex
             alpha = alpha * alpha_decay
         energy_prev = energy
     else:
-        raise SCFNotConverged()
+        raise SCFNotConverged(P_out, energy)
     return P_out.detach(), energy.detach()
