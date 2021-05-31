@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Dict, List, Tuple, Union
+from typing import Dict, Iterable, List, Tuple, Union
 
 import torch
 import xitorch
@@ -68,6 +68,7 @@ def solve_scf(  # noqa: C901 TODO too complex
     alpha: float = 0.5,
     alpha_decay: float = 1.0,
     max_iterations: int = 100,
+    iterations: Iterable[int] = None,
     density_threshold: float = 1e-5,
     print_iterations: Union[bool, int] = False,
     mode: str = "KS",
@@ -95,7 +96,7 @@ def solve_scf(  # noqa: C901 TODO too complex
         log_dict["denmat"] = []
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
-    for i in range(max_iterations):
+    for i in iterations or range(max_iterations):
         V_H, V_xc, E_xc = basis.get_int_integrals(
             P_in, xc_functional, create_graph=create_graph
         )
