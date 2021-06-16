@@ -47,14 +47,16 @@ class GridBasis(Basis):
         return S, T, self.dx * self.v_ext.diag_embed()
 
     def get_int_integrals(
-        self, P: Tensor, xc_functional: Functional
+        self, P: Tensor, xc_functional: Functional, create_graph: bool = False
     ) -> Tuple[Tensor, Tensor, Tensor]:
         density = Density(self.density(P))
         if xc_functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
 
         v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
-        E_xc, v_xc = get_XC_energy_potential(density, self.grid, xc_functional)
+        E_xc, v_xc = get_XC_energy_potential(
+            density, self.grid, xc_functional, create_graph
+        )
         return self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:
@@ -216,12 +218,16 @@ def get_XC_energy(density: Density, grid: Tensor, xc: Functional) -> Tensor:
 
 
 def get_XC_energy_potential(
-    density: Density, grid: Tensor, xc: Functional
+    density: Density, grid: Tensor, xc: Functional, create_graph: bool = False
 ) -> Tuple[Tensor, Tensor]:
     """Evaluate XC potential."""
-    density.value = density.value.requires_grad_()
+    if not density.value.requires_grad:
+        density = Density(density.value.detach().requires_grad_(), density.grad)
     dx = get_dx(grid)
     E_xc = get_XC_energy(density, grid, xc)
-    (E_xc).sum().backward()
-
-    return E_xc.detach(), density.value.grad / dx
+    (V_xc,) = torch.autograd.grad(
+        E_xc.sum() / dx, density.value, retain_graph=True, create_graph=create_graph
+    )
+    if not create_graph:
+        E_xc = E_xc.detach()
+    return E_xc, V_xc

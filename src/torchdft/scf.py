@@ -32,6 +32,7 @@ def solve_scf(
     print_iterations: Union[bool, int] = False,
     mode: str = "KS",
     silent: bool = False,
+    create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
     S, T, V_ext = basis.get_core_integrals()
@@ -43,7 +44,9 @@ def solve_scf(
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in range(max_iterations):
-        V_H, V_xc, E_xc = basis.get_int_integrals(P_in, xc_functional)
+        V_H, V_xc, E_xc = basis.get_int_integrals(
+            P_in, xc_functional, create_graph=create_graph
+        )
         F = T + V_ext + V_H + V_xc
         P_out, energy_orb = ks_iteration(F, S.X, occ)
         energy = (

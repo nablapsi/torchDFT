@@ -20,7 +20,7 @@ class Basis:
 
     @abstractmethod
     def get_int_integrals(
-        self, P: Tensor, xc_functional: Functional
+        self, P: Tensor, xc_functional: Functional, create_graph: bool = False
     ) -> Tuple[Tensor, Tensor, Tensor]:
         pass
 
