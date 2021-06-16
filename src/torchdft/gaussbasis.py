@@ -28,7 +28,7 @@ class GaussianBasis(Basis):
         phi = torch.from_numpy(dft.numint.eval_ao(mol, self.grid.coords, deriv=1))
         self.phi = phi[0]
         self.grad_phi = phi[1:4]
-        self.E_nuc = mol.energy_nuc()
+        self.E_nuc = torch.tensor(mol.energy_nuc())
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self.S, self.T, self.V_ext
