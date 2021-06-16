@@ -33,7 +33,7 @@ class GaussianBasis(Basis):
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self.S, self.T, self.V_ext
 
-    def _density(self, P: Tensor) -> Tensor:
+    def density(self, P: Tensor) -> Tensor:
         return ((self.phi @ P) * self.phi).sum(dim=-1)
 
     def get_int_integrals(
@@ -41,7 +41,7 @@ class GaussianBasis(Basis):
     ) -> Tuple[Tensor, Tensor, Tensor]:
         V_H = torch.einsum("ijkl,kl->ij", self.eri, P)
         P = P.detach().requires_grad_()
-        density = Density(self._density(P))
+        density = Density(self.density(P))
         if xc_functional.requires_grad:
             # P + P^t is needed in order for grad w.r.t. P to be symmetric
             density.grad = (
@@ -51,5 +51,5 @@ class GaussianBasis(Basis):
         (V_xc,) = torch.autograd.grad(E_xc, P)
         return V_H, V_xc, E_xc.detach()
 
-    def density_rms(self, P: Tensor) -> Tensor:
-        return (self._density(P) ** 2 * self.grid_weights).sum().sqrt()
+    def density_mse(self, density: Tensor) -> Tensor:
+        return (density ** 2 * self.grid_weights).sum()

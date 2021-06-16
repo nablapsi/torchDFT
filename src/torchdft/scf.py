@@ -49,7 +49,7 @@ def solve_scf(
         energy = (
             energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum((-2, -1)) + basis.E_nuc
         )
-        density_diff = basis.density_rms(P_out - P_in)
+        density_diff = basis.density_mse(basis.density(P_out - P_in))
         if print_iterations and i % print_iterations == 0:
             print(
                 "%3i   %10.7f   %10.7f   %3.4e" % (i, energy_prev, energy, density_diff)
