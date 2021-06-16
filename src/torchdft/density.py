@@ -12,12 +12,3 @@ class Density:
     def __init__(self, density: Tensor, grad: Tensor = None):
         self.value = density
         self.grad = grad
-
-    def detach(self) -> "Density":
-        value = self.value.detach()
-
-        if self.grad is not None:
-            grad: Optional[Tensor] = self.grad.detach()
-        else:
-            grad = None
-        return Density(value, grad)

@@ -220,7 +220,6 @@ def get_XC_energy_potential(
     density: Density, grid: Tensor, xc: Functional
 ) -> Tuple[Tensor, Tensor]:
     """Evaluate XC potential."""
-    density = density.detach()
     density.value = density.value.requires_grad_()
     dx = get_dx(grid)
     E_xc = get_XC_energy(density, grid, xc)
