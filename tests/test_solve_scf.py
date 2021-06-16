@@ -165,7 +165,7 @@ def test_batched_solve_scf():
             occ = systems[i].occ(mode)
             try:
                 P, E = solve_scf(
-                    basis, occ, Lda1d(), max_iterations=1, log_dict=log_dict, mode=mode
+                    basis, occ, Lda1d(), max_iterations=1, log_dict=log_dict
                 )
             except SCFNotConverged:
                 pass
@@ -178,7 +178,7 @@ def test_batched_solve_scf():
         log_dict = {}
         try:
             P, E = solve_scf(
-                batchgrid, occ, Lda1d(), max_iterations=1, log_dict=log_dict, mode=mode
+                batchgrid, occ, Lda1d(), max_iterations=1, log_dict=log_dict
             )
         except SCFNotConverged:
             pass

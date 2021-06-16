@@ -71,7 +71,6 @@ def solve_scf(  # noqa: C901 TODO too complex
     iterations: Iterable[int] = None,
     density_threshold: float = 1e-5,
     print_iterations: Union[bool, int] = False,
-    mode: str = "KS",
     enforce_symmetry: bool = False,
     log_dict: Dict[str, List[Tensor]] = None,
     create_graph: bool = False,
