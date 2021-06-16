@@ -3,16 +3,16 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import abstractmethod
 
-from torch import Tensor
+from torch import Tensor, nn
 
 from .density import Density
 
 
-class Functional:
+class Functional(nn.Module):
     """Represents a density functional."""
 
     requires_grad: bool
 
     @abstractmethod
-    def __call__(self, density: Density) -> Tensor:
+    def forward(self, density: Density) -> Tensor:
         pass

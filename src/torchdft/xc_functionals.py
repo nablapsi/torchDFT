@@ -19,7 +19,7 @@ class Lda1d(Functional):
 
     requires_grad = False
 
-    def __call__(self, density: Density) -> Tensor:
+    def forward(self, density: Density) -> Tensor:
         """LDA XC energy for exponential coulomb interaction."""
         return self.get_exponential_coulomb_LDAX_energy_density(
             density
@@ -86,7 +86,7 @@ class LdaPw92(Functional):
 
     requires_grad = False
 
-    def __call__(self, density: Density) -> Tensor:
+    def forward(self, density: Density) -> Tensor:
         eps_x, eps_c, *_ = _lda_pw92(density.value)
         return eps_x + eps_c
 
@@ -120,7 +120,7 @@ class PBE(Functional):
 
     requires_grad = True
 
-    def __call__(self, density: Density) -> Tensor:
+    def forward(self, density: Density) -> Tensor:
         eps_x, eps_c, kF, zeta = _lda_pw92(density.value)
         s = density.grad / (2 * kF * density.value)
         ks = torch.sqrt(4 * kF / math.pi)

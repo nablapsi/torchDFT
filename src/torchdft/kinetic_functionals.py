@@ -16,9 +16,10 @@ class ThomasFermi1D(Functional):
     requires_grad = False
 
     def __init__(self, A: float = 0.3):
+        super().__init__()
         self.A = A
 
-    def __call__(self, density: Density) -> Tensor:
+    def forward(self, density: Density) -> Tensor:
         return self.A * density.value ** 2
 
 
@@ -27,6 +28,6 @@ class VonWeizsaecker(Functional):
 
     requires_grad = True
 
-    def __call__(self, density: Density) -> Tensor:
+    def forward(self, density: Density) -> Tensor:
         assert density.grad is not None
         return 1.0 / 8.0 * density.grad ** 2 / density.value
