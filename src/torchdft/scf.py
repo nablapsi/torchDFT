@@ -8,6 +8,7 @@ from torch import Tensor
 from .basis import Basis
 from .errors import SCFNotConverged
 from .functional import Functional
+from .gridbasis import GridBasis
 from .utils import GeneralizedDiagonalizer
 
 __all__ = ["solve_scf"]
@@ -31,6 +32,7 @@ def solve_scf(
     density_threshold: float = 1e-5,
     print_iterations: Union[bool, int] = False,
     mode: str = "KS",
+    enforce_symmetry: bool = False,
     silent: bool = False,
     create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
@@ -39,6 +41,8 @@ def solve_scf(
     S = GeneralizedDiagonalizer(S)
     F = T + V_ext
     P_in, energy_orb = ks_iteration(F, S.X, occ)
+    if enforce_symmetry and isinstance(basis, GridBasis):
+        P_in = basis.symmetrize_P(P_in)
     energy_prev = energy_orb + basis.E_nuc
     print_iterations = print_iterations and len(P_in.shape) == 2
     if print_iterations:
@@ -49,6 +53,9 @@ def solve_scf(
         )
         F = T + V_ext + V_H + V_xc
         P_out, energy_orb = ks_iteration(F, S.X, occ)
+        # TODO duplicate, should be made part of ks_iteration()
+        if enforce_symmetry and isinstance(basis, GridBasis):
+            P_out = basis.symmetrize_P(P_out)
         energy = (
             energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum((-2, -1)) + basis.E_nuc
         )

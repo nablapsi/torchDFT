@@ -72,6 +72,12 @@ class GridBasis(Basis):
     def density(self, P: Tensor) -> Tensor:
         return P.diagonal(dim1=-2, dim2=-1)
 
+    def symmetrize_P(self, P: Tensor) -> Tensor:
+        den = self.density(P)
+        den = (den + den.flip(-1)) / 2
+        P = den.diag_embed()
+        return P
+
 
 def get_gradient(grid_dim: int, device: torch.device = None) -> Tensor:
     """Finite difference approximation of gradient operator."""
