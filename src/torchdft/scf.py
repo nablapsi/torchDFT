@@ -69,7 +69,7 @@ def solve_scf(  # noqa: C901 TODO too complex
     alpha_decay: float = 1.0,
     max_iterations: int = 100,
     iterations: Iterable[int] = None,
-    density_threshold: float = 1e-5,
+    density_threshold: float = 1e-4,
     print_iterations: Union[bool, int] = False,
     enforce_symmetry: bool = False,
     log_dict: Dict[str, List[Tensor]] = None,
@@ -112,7 +112,7 @@ def solve_scf(  # noqa: C901 TODO too complex
         if log_dict is not None:
             log_dict["energy"].append(energy)
             log_dict["denmat"].append(P_out)
-        density_diff = basis.density_mse(basis.density(P_out - P_in))
+        density_diff = basis.density_mse(basis.density(P_out - P_in)).sqrt()
         if print_iterations and i % print_iterations == 0:
             print(
                 "%3i   %10.7f   %10.7f   %3.4e" % (i, energy_prev, energy, density_diff)
