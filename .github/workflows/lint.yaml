@@ -72,6 +72,5 @@ jobs:
       - name: Install dependencies
         run: |
           poetry install --no-dev
-          pip install -U "torch==1.9.*" --pre -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
           pip install mypy
       - run: mypy

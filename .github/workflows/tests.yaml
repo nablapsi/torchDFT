@@ -37,9 +37,7 @@ jobs:
       - name: Build
         run: poetry build
       - name: Install
-        run: |
-          pip install -U torchdft[3d,train] --pre -f ./dist
-          pip install -U "torch==1.9.*" --pre -f https://download.pytorch.org/whl/nightly/cpu/torch_nightly.html
+        run: pip install -U torchdft[3d,train] --pre -f ./dist
       - name: Test
         run: coverage run -m pytest
       - name: Upload to Codecov
