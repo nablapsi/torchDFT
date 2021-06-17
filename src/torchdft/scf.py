@@ -33,7 +33,6 @@ def solve_scf(
     print_iterations: Union[bool, int] = False,
     mode: str = "KS",
     enforce_symmetry: bool = False,
-    silent: bool = False,
     create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
@@ -69,6 +68,5 @@ def solve_scf(
         P_in = P_in + alpha * (P_out - P_in)
         energy_prev = energy
     else:
-        if not silent:
-            raise SCFNotConverged()
-    return P_out, energy
+        raise SCFNotConverged()
+    return P_out.detach(), energy.detach()
