@@ -1,7 +1,11 @@
+from typing import Dict, List
+
 import torch
 from pyscf import dft, gto
+from torch import Tensor
 from torch.testing import assert_allclose
 
+from torchdft.errors import SCFNotConverged
 from torchdft.gaussbasis import GaussianBasis
 from torchdft.gridbasis import GridBasis
 from torchdft.scf import ks_iteration, solve_scf
@@ -99,7 +103,7 @@ def test_batched_ks_iteration():
             F = T + Vext
             P, E = ks_iteration(F, S.X, occ)
 
-            V_H, V_xc, E_xc = basis.get_int_integrals(P, Lda1d())
+            V_H, V_xc, E_xc = basis.get_int_integrals(P, Lda1d(), create_graph=False)
             F = T + Vext + V_H + V_xc
             P, E = ks_iteration(F, S.X, occ)
 
@@ -113,7 +117,7 @@ def test_batched_ks_iteration():
         F = T + Vext
         P, E = ks_iteration(F, Sb.X, occ)
 
-        V_H, V_xc, E_xc = batchgrid.get_int_integrals(P, Lda1d())
+        V_H, V_xc, E_xc = batchgrid.get_int_integrals(P, Lda1d(), create_graph=False)
         F = T + Vext + V_H + V_xc
         P, E = ks_iteration(F, Sb.X, occ)
 
@@ -157,16 +161,28 @@ def test_batched_solve_scf():
     for mode in ["KS", "OF"]:
         P_list, E_list = [], []
         for i, basis in enumerate(gridbasis):
+            log_dict: Dict[str, List[Tensor]] = {}
             occ = systems[i].occ(mode)
-            P, E = solve_scf(basis, occ, Lda1d(), max_iterations=1, silent=True)
+            try:
+                P, E = solve_scf(
+                    basis, occ, Lda1d(), max_iterations=1, log_dict=log_dict, mode=mode
+                )
+            except SCFNotConverged:
+                pass
 
-            P_list.append(P)
-            E_list.append(E)
+            P_list.append(log_dict["denmat"][-1])
+            E_list.append(log_dict["energy"][-1])
 
         # Make two KS iterations with the batched version:
         occ = systembatch.occ(mode)
-        P, E = solve_scf(batchgrid, occ, Lda1d(), max_iterations=1, silent=True)
+        log_dict = {}
+        try:
+            P, E = solve_scf(
+                batchgrid, occ, Lda1d(), max_iterations=1, log_dict=log_dict, mode=mode
+            )
+        except SCFNotConverged:
+            pass
 
         for i in range(systembatch.nbatch):
-            assert_allclose(P_list[i], P[i])
-            assert_allclose(E_list[i], E[i])
+            assert_allclose(P_list[i], log_dict["denmat"][-1][i])
+            assert_allclose(E_list[i], log_dict["energy"][-1][i])

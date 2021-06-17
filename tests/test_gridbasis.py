@@ -75,7 +75,8 @@ class TestFunctionals:
 
         pot = get_hartree_potential(density, grid, soft_coulomb)
 
-        density.requires_grad = True
+        if not density.requires_grad:
+            density = density.requires_grad_()
         ener = get_hartree_energy(density, grid, soft_coulomb)
         ener.backward()
         assert_allclose(pot, density.grad / dx)
@@ -111,7 +112,8 @@ class TestFunctionals:
 
         pot = get_external_potential(charges, centers, grid, soft_coulomb)
 
-        density.requires_grad = True
+        if not density.requires_grad:
+            density = density.requires_grad_()
         ener = get_external_potential_energy(pot, density, grid)
         ener.backward()
         assert_allclose(pot, density.grad / dx)
@@ -128,8 +130,8 @@ class TestFunctionals:
 
         _, pot = get_XC_energy_potential(density, grid, LDA)
 
-        density = density.detach()
-        density.value.requires_grad = True
+        if not density.value.requires_grad:
+            density.value = density.value.requires_grad_()
         ener = get_XC_energy(density, grid, LDA)
         ener.backward()
         assert_allclose(pot, density.value.grad / dx)
