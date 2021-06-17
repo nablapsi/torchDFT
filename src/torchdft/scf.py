@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -35,6 +35,7 @@ def solve_scf(
     print_iterations: Union[bool, int] = False,
     mode: str = "KS",
     enforce_symmetry: bool = False,
+    log_dict: Dict[str, List[Tensor]] = None,
     create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
@@ -46,6 +47,9 @@ def solve_scf(
         P_in = basis.symmetrize_P(P_in)
     energy_prev = energy_orb + basis.E_nuc
     print_iterations = print_iterations and len(P_in.shape) == 2
+    if log_dict is not None:
+        log_dict["energy"] = []
+        log_dict["denmat"] = []
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in range(max_iterations):
@@ -60,6 +64,9 @@ def solve_scf(
         energy = (
             energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum((-2, -1)) + basis.E_nuc
         )
+        if log_dict is not None:
+            log_dict["energy"].append(energy)
+            log_dict["denmat"].append(P_out)
         density_diff = basis.density_mse(basis.density(P_out - P_in))
         if print_iterations and i % print_iterations == 0:
             print(
