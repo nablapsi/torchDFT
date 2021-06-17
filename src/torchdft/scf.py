@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from typing import Tuple, Union
 
+import torch
 from torch import Tensor
 
 from .basis import Basis
@@ -28,6 +29,7 @@ def solve_scf(
     occ: Tensor,
     xc_functional: Functional,
     alpha: float = 0.5,
+    alpha_decay: float = 1.0,
     max_iterations: int = 100,
     density_threshold: float = 1e-5,
     print_iterations: Union[bool, int] = False,
@@ -63,9 +65,12 @@ def solve_scf(
             print(
                 "%3i   %10.7f   %10.7f   %3.4e" % (i, energy_prev, energy, density_diff)
             )
-        if (density_diff < density_threshold).all():
+        converged = density_diff < density_threshold
+        if converged.all():
             break
-        P_in = P_in + alpha * (P_out - P_in)
+        alpha_masked = torch.where(converged, 0.0, alpha)[..., None, None]
+        P_in = P_in + alpha_masked * (P_out - P_in)
+        alpha = alpha * alpha_decay
         energy_prev = energy
     else:
         raise SCFNotConverged()
