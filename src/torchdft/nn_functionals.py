@@ -33,7 +33,6 @@ class SigLayer(nn.Module):
             self.Ne = density.detach().sum(-1) * self.dx
         beta = (-(((self.Ne - 1) / self.sigma) ** 2)).exp()[:, None]
         V_H = get_hartree_potential(density, self.grid, self.interaction_fn)
-        # NOTE: Why the 5e-1 for the Hartree energy density?
         return xc_energy_density * (1 - beta) - 5e-1 * V_H * beta
 
 
@@ -75,7 +74,6 @@ class Conv1dPileLayers(nn.Module):
     ):
         super().__init__()
 
-        # TODO: Should I create dedicated errors for the asserts?
         assert len(kernels) + 1 == len(channels)
         self.requires_grad = False
         self.transfer = nn.SiLU()
@@ -125,7 +123,6 @@ class Conv1dFunctionalNet(Functional):
         self.conv1d = Conv1dPileLayers(channels, kernels, negative_transform)
 
     def forward(self, den: Density) -> Tensor:
-        # NOTE: Anyway to do this without if?
         if len(den.value.shape) == 2:
             x = den.value[:, None, :]
         else:
