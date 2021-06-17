@@ -146,7 +146,7 @@ def get_hartree_potential(
     r"""Evaluate Hartree potential.
 
     Get Hartree potential evaluated as:
-    0.5 \int n(r') interaction_function(r, r') dr'
+    \int n(r') interaction_function(r, r') dr'
 
     Args:
         density: Float torch array of dimension (grid_dim,) holding the density
