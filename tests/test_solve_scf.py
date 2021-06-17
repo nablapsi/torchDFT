@@ -45,7 +45,7 @@ def test_h2_gauss():
     occ = torch.tensor([2])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy = solve_scf(basis, occ, LdaPw92())
+    density, energy = solve_scf(basis, occ, LdaPw92(), mixer="pulay", use_xitorch=False)
     assert_allclose(energy, energy_true)
 
 
@@ -56,9 +56,9 @@ def test_h2_gauss_pbe():
     mf.xc = "pbe"
     occ = torch.tensor([2])
     energy_true = mf.kernel()
-    basis = GaussianBasis(mol)
-    density, energy = solve_scf(basis, occ, PBE())
-    assert_allclose(energy, energy_true)
+    basis = GaussianBasis([mol])
+    density, energy = solve_scf(basis, occ, PBE(), mixer="pulay")
+    assert_allclose(energy[0], energy_true)
 
 
 def test_batched_ks_iteration():
