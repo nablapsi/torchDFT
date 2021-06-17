@@ -68,7 +68,7 @@ jobs:
             poetry.lock
             ${{ env.VIRTUAL_ENV }}/bin
             ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-2
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-3
       - name: Install dependencies
         run: |
           poetry install --no-dev
