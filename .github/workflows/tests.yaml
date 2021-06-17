@@ -31,7 +31,7 @@ jobs:
           path: |
             ${{ env.VIRTUAL_ENV }}/bin
             ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
-          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-2
+          key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
       - name: Install dependencies
         run: pip install -U poetry-dynamic-versioning pytest coverage
       - name: Build
