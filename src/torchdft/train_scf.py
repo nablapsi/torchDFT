@@ -88,7 +88,6 @@ def training_step(
     E_truth: Tensor,
     n_truth: Tensor,
     trajectory_discount: float = 0.8,
-    initial_skip: int = 10,
     **kwargs: Any,
 ) -> Tuple[Tensor, Tensor, Tensor]:
     log_dict: Dict[str, List[Tensor]] = {}
@@ -103,13 +102,10 @@ def training_step(
         )
     except SCFNotConverged:
         pass
-    E_pred = torch.stack(log_dict["energy"][-initial_skip:])
+    E_pred = log_dict["energy"][-1]
     n_pred = basis.density(log_dict["denmat"][-1])
-    w = trajectory_discount ** torch.arange(
-        len(E_pred) - 1, -1, -1, device=E_pred.device
-    )
     N = occ.sum()
-    E_loss = (w * (E_pred - E_truth) ** 2).sum(-1) / N
+    E_loss = ((E_pred - E_truth) ** 2).sum(-1) / N
     n_loss = basis.density_mse(n_pred - n_truth) / N
     loss = E_loss + n_loss
     loss.backward()
