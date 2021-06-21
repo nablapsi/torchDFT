@@ -42,7 +42,7 @@ def train_functional(
         basis_list.append(basis_class(system))
         occ_list.append(system.occ(mode=mode))
     step = 0
-    for epoch in range(max_epochs):
+    for _epoch in range(max_epochs):
 
         def closure() -> float:
             nonlocal step
@@ -67,7 +67,7 @@ def train_functional(
                     step,
                 )
             if checkpoint_freq and step % checkpoint_freq == 0:
-                torch.save(functional.state_dict(), f"checkpoint_{epoch}.pth")
+                torch.save(functional.state_dict(), f"checkpoint_{step}.pth")
             step += 1
             return loss.item()
 
