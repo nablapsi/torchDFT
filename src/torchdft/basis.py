@@ -2,11 +2,11 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import abstractmethod
-from typing import Tuple
+from typing import Tuple, Union
 
 from torch import Tensor, nn
 
-from .functional import Functional
+from .functional import ComposedFunctional, Functional
 
 
 class Basis(nn.Module):
@@ -20,7 +20,10 @@ class Basis(nn.Module):
 
     @abstractmethod
     def get_int_integrals(
-        self, P: Tensor, xc_functional: Functional, create_graph: bool = False
+        self,
+        P: Tensor,
+        xc_functional: Union[Functional, ComposedFunctional],
+        create_graph: bool = False,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         pass
 

@@ -8,7 +8,7 @@ from torch import Tensor
 
 from .basis import Basis
 from .density import Density
-from .functional import Functional
+from .functional import ComposedFunctional, Functional
 from .utils import System, SystemBatch, exp_coulomb, get_dx
 
 
@@ -47,7 +47,10 @@ class GridBasis(Basis):
         return S, T, self.dx * self.v_ext.diag_embed()
 
     def get_int_integrals(
-        self, P: Tensor, xc_functional: Functional, create_graph: bool = False
+        self,
+        P: Tensor,
+        xc_functional: Union[Functional, ComposedFunctional],
+        create_graph: bool = False,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         density = Density(self.density(P))
         if xc_functional.requires_grad:
@@ -213,15 +216,20 @@ def get_external_potential(
     return -(charges[..., None] * interaction_fn(grid - centers[..., None])).sum(-2)
 
 
-def get_XC_energy(density: Density, grid: Tensor, xc: Functional) -> Tensor:
-    """Evaluate XC energy."""
+def get_XC_energy(
+    density: Density, grid: Tensor, xc: Union[Functional, ComposedFunctional]
+) -> Tensor:
+    """Evaluate functional energy."""
     dx = get_dx(grid)
 
     return (xc(density) * density.value).sum(-1) * dx
 
 
 def get_XC_energy_potential(
-    density: Density, grid: Tensor, xc: Functional, create_graph: bool = False
+    density: Density,
+    grid: Tensor,
+    xc: Union[Functional, ComposedFunctional],
+    create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Evaluate XC potential."""
     if not density.value.requires_grad:
