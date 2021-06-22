@@ -22,7 +22,7 @@ class Basis(nn.Module):
     def get_int_integrals(
         self,
         P: Tensor,
-        xc_functional: Union[Functional, ComposedFunctional],
+        functional: Union[Functional, ComposedFunctional],
         create_graph: bool = False,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         pass

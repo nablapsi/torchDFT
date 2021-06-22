@@ -64,7 +64,7 @@ class DIIS:
 def solve_scf(  # noqa: C901 TODO too complex
     basis: Basis,
     occ: Tensor,
-    xc_functional: Union[Functional, ComposedFunctional],
+    functional: Union[Functional, ComposedFunctional],
     alpha: float = 0.5,
     alpha_decay: float = 1.0,
     max_iterations: int = 100,
@@ -96,10 +96,10 @@ def solve_scf(  # noqa: C901 TODO too complex
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in iterations or range(max_iterations):
-        V_H, V_xc, E_xc = basis.get_int_integrals(
-            P_in, xc_functional, create_graph=create_graph
+        V_H, V_func, E_func = basis.get_int_integrals(
+            P_in, functional, create_graph=create_graph
         )
-        F = T + V_ext + V_H + V_xc
+        F = T + V_ext + V_H + V_func
         if mixer == "pulay":
             F = diis.step(P_in, F)
         P_out, energy_orb = ks_iteration(F, S, occ, use_xitorch=use_xitorch)
@@ -107,7 +107,10 @@ def solve_scf(  # noqa: C901 TODO too complex
         if enforce_symmetry and isinstance(basis, GridBasis):
             P_out = basis.symmetrize_P(P_out)
         energy = (
-            energy_orb + E_xc - ((V_H / 2 + V_xc) * P_in).sum((-2, -1)) + basis.E_nuc
+            energy_orb
+            + E_func
+            - ((V_H / 2 + V_func) * P_in).sum((-2, -1))
+            + basis.E_nuc
         )
         if log_dict is not None:
             log_dict["energy"].append(energy)

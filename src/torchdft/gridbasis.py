@@ -49,18 +49,27 @@ class GridBasis(Basis):
     def get_int_integrals(
         self,
         P: Tensor,
-        xc_functional: Union[Functional, ComposedFunctional],
+        functional: Union[Functional, ComposedFunctional],
         create_graph: bool = False,
     ) -> Tuple[Tensor, Tensor, Tensor]:
+        """Evaluate Hartree and extra potential contributions.
+
+        Args:
+            P: Float torch array of dimension (grid_dim, grid_dim)
+              holding the density matrix.
+            functional: Functional or ComposedFunctional.
+              XC, kinetic, or linear combination of functionals.
+            create_graph: Bool.
+        """
         density = Density(self.density(P))
-        if xc_functional.requires_grad:
+        if functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
 
         v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
-        E_xc, v_xc = get_XC_energy_potential(
-            density, self.grid, xc_functional, create_graph
+        E_func, v_func = get_functional_energy_potential(
+            density, self.grid, functional, create_graph
         )
-        return self.dx * v_H.diag_embed(), self.dx * v_xc.diag_embed(), E_xc
+        return self.dx * v_H.diag_embed(), self.dx * v_func.diag_embed(), E_func
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:
         grad_operator = (
@@ -216,29 +225,29 @@ def get_external_potential(
     return -(charges[..., None] * interaction_fn(grid - centers[..., None])).sum(-2)
 
 
-def get_XC_energy(
-    density: Density, grid: Tensor, xc: Union[Functional, ComposedFunctional]
+def get_functional_energy(
+    density: Density, grid: Tensor, functional: Union[Functional, ComposedFunctional]
 ) -> Tensor:
     """Evaluate functional energy."""
     dx = get_dx(grid)
 
-    return (xc(density) * density.value).sum(-1) * dx
+    return (functional(density) * density.value).sum(-1) * dx
 
 
-def get_XC_energy_potential(
+def get_functional_energy_potential(
     density: Density,
     grid: Tensor,
-    xc: Union[Functional, ComposedFunctional],
+    functional: Union[Functional, ComposedFunctional],
     create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
-    """Evaluate XC potential."""
+    """Evaluate functional potential."""
     if not density.value.requires_grad:
         density = Density(density.value.detach().requires_grad_(), density.grad)
     dx = get_dx(grid)
-    E_xc = get_XC_energy(density, grid, xc)
-    (V_xc,) = torch.autograd.grad(
-        E_xc.sum() / dx, density.value, retain_graph=True, create_graph=create_graph
+    E_func = get_functional_energy(density, grid, functional)
+    (v_func,) = torch.autograd.grad(
+        E_func.sum() / dx, density.value, retain_graph=True, create_graph=create_graph
     )
     if not create_graph:
-        E_xc = E_xc.detach()
-    return E_xc, V_xc
+        E_func = E_func.detach()
+    return E_func, v_func

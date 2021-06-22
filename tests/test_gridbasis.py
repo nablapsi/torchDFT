@@ -5,11 +5,11 @@ from torchdft.density import Density
 from torchdft.gridbasis import (
     get_external_potential,
     get_external_potential_energy,
+    get_functional_energy,
+    get_functional_energy_potential,
     get_hartree_energy,
     get_hartree_potential,
     get_laplacian,
-    get_XC_energy,
-    get_XC_energy_potential,
 )
 from torchdft.utils import gaussian, get_dx, soft_coulomb
 from torchdft.xc_functionals import Lda1d
@@ -128,10 +128,10 @@ class TestFunctionals:
         dx = get_dx(grid)
         density = Density(gaussian(grid, 1, 1))
 
-        _, pot = get_XC_energy_potential(density, grid, LDA)
+        _, pot = get_functional_energy_potential(density, grid, LDA)
 
         if not density.value.requires_grad:
             density.value = density.value.requires_grad_()
-        ener = get_XC_energy(density, grid, LDA)
+        ener = get_functional_energy(density, grid, LDA)
         ener.backward()
         assert_allclose(pot, density.value.grad / dx)
