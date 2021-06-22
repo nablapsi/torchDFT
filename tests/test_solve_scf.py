@@ -14,14 +14,14 @@ from torchdft.xc_functionals import PBE, Lda1d, LdaPw92
 
 
 def test_h2():
-    charges = torch.tensor([1.0, 1.0])
-    centers = torch.tensor([0.0, 1.401118437])
+    charges = torch.tensor([1.0, 1.0], dtype=torch.float64)
+    centers = torch.tensor([0.0, 1.401118437], dtype=torch.float64)
     nelectrons = 2
-    grid = torch.arange(-10, 10, 0.1)
+    grid = torch.arange(-10, 10, 0.1, dtype=torch.float64)
     H2 = System(nelectrons, charges, centers, grid)
     basis = GridBasis(H2)
     density, energy = solve_scf(basis, H2.occ(), Lda1d())
-    assert_allclose(energy, -1.4045913)
+    assert_allclose(energy, -1.4046211)
 
 
 def test_ks_of():
