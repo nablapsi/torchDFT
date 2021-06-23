@@ -76,6 +76,7 @@ def solve_scf(  # noqa: C901 TODO too complex
     create_graph: bool = False,
     use_xitorch: bool = True,
     mixer: str = "linear",
+    P_guess: Tensor = None,
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
     assert mixer in {"linear", "pulay"}
@@ -85,10 +86,13 @@ def solve_scf(  # noqa: C901 TODO too complex
     if not use_xitorch:
         S = GeneralizedDiagonalizer(S).X
     F = T + V_ext
-    P_in, energy_orb = ks_iteration(F, S, occ, use_xitorch=use_xitorch)
+    if P_guess is None:
+        P_in, energy_orb = ks_iteration(F, S, occ, use_xitorch=use_xitorch)
+        energy_prev = energy_orb + basis.E_nuc
+    else:
+        P_in, energy_prev = P_guess, torch.tensor([0e0])
     if enforce_symmetry and isinstance(basis, GridBasis):
         P_in = basis.symmetrize_P(P_in)
-    energy_prev = energy_orb + basis.E_nuc
     print_iterations = print_iterations and len(P_in.shape) == 2
     if log_dict is not None:
         log_dict["energy"] = []
