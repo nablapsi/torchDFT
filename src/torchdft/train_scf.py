@@ -87,7 +87,6 @@ def training_step(
     functional: Functional,
     E_truth: Tensor,
     n_truth: Tensor,
-    trajectory_discount: float = 0.8,
     **kwargs: Any,
 ) -> Tuple[Tensor, Tensor, Tensor]:
     log_dict: Dict[str, List[Tensor]] = {}
