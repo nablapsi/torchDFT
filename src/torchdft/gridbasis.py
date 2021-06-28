@@ -73,7 +73,7 @@ class GridBasis(Basis):
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:
         grad_operator = get_gradient(self.grid) / self.dx
-        return torch.einsum("ij, ...j -> i", grad_operator, density)
+        return torch.einsum("ij, ...j -> ...i", grad_operator, density)
 
     def density_mse(self, density: Tensor) -> Tensor:
         dx = get_dx(self.grid)
