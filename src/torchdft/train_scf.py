@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from .basis import Basis
 from .errors import SCFNotConverged
-from .functional import Functional
+from .functional import ComposedFunctional, Functional
 from .scf import solve_scf
 from .utils import SystemBatch
 
@@ -22,7 +22,7 @@ T_co = TypeVar("T_co", covariant=True)
 
 def train_functional(
     basis_class: Callable[[SystemBatch], Basis],
-    functional: Functional,
+    functional: Union[Functional, ComposedFunctional],
     optimizer: torch.optim.Optimizer,
     dataloader: DataLoader[T_co],
     alpha_decay: float = 0.9,
@@ -84,7 +84,7 @@ def train_functional(
 def training_step(
     basis: Basis,
     occ: Tensor,
-    functional: Functional,
+    functional: Union[Functional, ComposedFunctional],
     E_truth: Tensor,
     n_truth: Tensor,
     **kwargs: Any,
