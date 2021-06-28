@@ -72,9 +72,7 @@ class GridBasis(Basis):
         return self.dx * v_H.diag_embed(), self.dx * v_func.diag_embed(), E_func
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:
-        grad_operator = (
-            get_gradient(self.grid.size(0), device=self.grid.device) / self.dx
-        )
+        grad_operator = get_gradient(self.grid) / self.dx
         return torch.einsum("ij, ...j -> i", grad_operator, density)
 
     def density_mse(self, density: Tensor) -> Tensor:
@@ -88,13 +86,14 @@ class GridBasis(Basis):
         return (P + P.flip(-1, -2)) / 2
 
 
-def get_gradient(grid_dim: int, device: torch.device = None) -> Tensor:
+def get_gradient(grid: Tensor) -> Tensor:
     """Finite difference approximation of gradient operator."""
+    grid_dim = grid.size(0)
     return (
-        (2.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=1)
-        + (-2.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=-1)
-        + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=2)
-        + (1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=-2)
+        (2.0 / 3.0 * grid.new_ones([grid_dim - 1]).diag_embed(offset=1))
+        + (-2.0 / 3.0 * grid.new_ones([grid_dim - 1]).diag_embed(offset=-1))
+        + (-1.0 / 12.0 * grid.new_ones([grid_dim - 2]).diag_embed(offset=2))
+        + (1.0 / 12.0 * grid.new_ones([grid_dim - 2]).diag_embed(offset=-2))
     )
 
 

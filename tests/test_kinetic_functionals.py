@@ -22,7 +22,7 @@ class TestKineticFunctionals:
         grid = torch.arange(-10, 10, 0.1)
         dx = get_dx(grid)
         density = Density(gaussian(grid, 0, 1))
-        grad_operator = get_gradient(grid.size(0)) / dx
+        grad_operator = get_gradient(grid) / dx
         density.grad = grad_operator.mv(density.value)
 
         assert_allclose(1.0 / 8.0, VonWeizsaecker()(density).sum() * 0.1)
