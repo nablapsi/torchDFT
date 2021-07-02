@@ -93,7 +93,7 @@ def solve_scf(  # noqa: C901 TODO too complex
         P_in, energy_prev = P_guess, torch.tensor([0e0])
     if enforce_symmetry and isinstance(basis, GridBasis):
         P_in = basis.symmetrize_P(P_in)
-    print_iterations = print_iterations and len(P_in.shape) == 2
+    print_iterations = print_iterations if len(P_in.shape) == 2 else False
     if log_dict is not None:
         log_dict["energy"] = []
         log_dict["denmat"] = []
