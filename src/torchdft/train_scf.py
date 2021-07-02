@@ -60,6 +60,7 @@ def train_functional(
                 for basis, occ, *data in zip(basis_list, occ_list, E_truth, n_truth)
             ]
             loss, E_loss, n_loss = (torch.stack(x).mean() for x in zip(*losses))
+            loss.backward()
             if writer:
                 writer.add_scalars(
                     "Losses",
@@ -107,5 +108,4 @@ def training_step(
     E_loss = ((E_pred - E_truth) ** 2).sum(-1) / N
     n_loss = basis.density_mse(n_pred - n_truth) / N
     loss = E_loss + n_loss
-    loss.backward()
     return loss, E_loss, n_loss
