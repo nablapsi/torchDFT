@@ -8,10 +8,11 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from torchdft.density import Density
-from torchdft.functional import Functional
-from torchdft.gridbasis import get_hartree_potential
-from torchdft.utils import get_dx
+from .density import Density
+from .functional import Functional
+from .gridbasis import get_hartree_potential
+from .kinetic_functionals import ThomasFermi1D
+from .utils import get_dx
 
 
 class SigLayer(nn.Module):
