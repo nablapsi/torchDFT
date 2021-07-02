@@ -14,3 +14,7 @@ class SCFNotConverged(TorchDFTError):
     def __init__(self, P: Tensor, energy: Tensor) -> None:
         self.P = P
         self.energy = energy
+
+
+class NanError(TorchDFTError):
+    pass

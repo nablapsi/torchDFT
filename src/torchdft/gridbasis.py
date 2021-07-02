@@ -8,6 +8,7 @@ from torch import Tensor
 
 from .basis import Basis
 from .density import Density
+from .errors import NanError
 from .functional import ComposedFunctional, Functional
 from .utils import System, SystemBatch, exp_coulomb, get_dx
 
@@ -249,4 +250,6 @@ def get_functional_energy_potential(
     )
     if not create_graph:
         E_func = E_func.detach()
+    if torch.any(torch.isnan(v_func)):
+        raise NanError()
     return E_func, v_func
