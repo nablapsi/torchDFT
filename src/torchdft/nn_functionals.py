@@ -11,7 +11,6 @@ from torch import Tensor
 from .density import Density
 from .functional import Functional
 from .gridbasis import get_hartree_potential
-from .kinetic_functionals import ThomasFermi1D
 from .utils import get_dx
 
 
