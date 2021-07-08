@@ -5,7 +5,7 @@
 from typing import Any, Callable, Dict, List, Tuple, TypeVar, Union
 
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -23,6 +23,7 @@ T_co = TypeVar("T_co", covariant=True)
 def train_functional(
     basis_class: Callable[[SystemBatch], Basis],
     functional: Union[Functional, ComposedFunctional],
+    trainable_functional: nn.Module,
     optimizer: torch.optim.Optimizer,
     dataloader: DataLoader[T_co],
     alpha_decay: float = 0.9,
