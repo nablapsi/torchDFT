@@ -15,7 +15,7 @@ class TestKineticFunctionals:
         density = Density(gaussian(grid, 0, 1))
 
         assert_allclose(
-            1 / (2.0 * math.sqrt(math.pi)), ThomasFermi1D(A=1.0)(density).sum() * 0.1
+            1 / (2.0 * math.sqrt(math.pi)), ThomasFermi1D(c=1.0)(density).sum() * 0.1
         )
 
     def test_get_vW_energy(self):
