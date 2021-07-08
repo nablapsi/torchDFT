@@ -19,9 +19,6 @@ class Functional(nn.Module):
     def forward(self, density: Density) -> Tensor:
         pass
 
-    def get_state_dict(self) -> Dict[str, Tensor]:
-        return self.state_dict()
-
 
 class ComposedFunctional(nn.Module):
     """Linear combination of density functionals."""
@@ -45,11 +42,3 @@ class ComposedFunctional(nn.Module):
             dim=-1,
         ).sum(-1)
         return epsilon
-
-    def get_state_dict(self) -> Dict[str, Tensor]:
-        state_dict: Dict[str, Tensor]
-        for functional in self.functionals:
-            _state_dict = functional.get_state_dict()
-            if len(_state_dict.keys()) > 0:
-                state_dict = _state_dict
-        return state_dict

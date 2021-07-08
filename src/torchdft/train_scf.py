@@ -69,7 +69,7 @@ def train_functional(
                     step,
                 )
             if checkpoint_freq and step % checkpoint_freq == 0:
-                torch.save(functional.get_state_dict(), f"checkpoint_{step}.pth")
+                torch.save(trainable_functional.state_dict(), f"checkpoint_{step}.pth")
             step += 1
             return loss.item()
 
