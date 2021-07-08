@@ -10,7 +10,7 @@ class TorchDFTError(Exception):
     pass
 
 
-class SCFNotConverged(TorchDFTError):
+class SCFNotConvergedError(TorchDFTError):
     def __init__(self, P: Tensor, energy: Tensor) -> None:
         self.P = P
         self.energy = energy

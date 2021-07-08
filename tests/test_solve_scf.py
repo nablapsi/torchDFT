@@ -5,7 +5,7 @@ from pyscf import dft, gto
 from torch import Tensor
 from torch.testing import assert_allclose
 
-from torchdft.errors import SCFNotConverged
+from torchdft.errors import SCFNotConvergedError
 from torchdft.gaussbasis import GaussianBasis
 from torchdft.gridbasis import GridBasis
 from torchdft.scf import ks_iteration, solve_scf
@@ -167,7 +167,7 @@ def test_batched_solve_scf():
                 P, E = solve_scf(
                     basis, occ, Lda1d(), max_iterations=1, log_dict=log_dict
                 )
-            except SCFNotConverged:
+            except SCFNotConvergedError:
                 pass
 
             P_list.append(log_dict["denmat"][-1])
@@ -180,7 +180,7 @@ def test_batched_solve_scf():
             P, E = solve_scf(
                 batchgrid, occ, Lda1d(), max_iterations=1, log_dict=log_dict
             )
-        except SCFNotConverged:
+        except SCFNotConvergedError:
             pass
 
         for i in range(systembatch.nbatch):

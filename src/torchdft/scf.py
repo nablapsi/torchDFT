@@ -9,7 +9,7 @@ import xitorch.linalg
 from torch import Tensor
 
 from .basis import Basis
-from .errors import SCFNotConverged
+from .errors import SCFNotConvergedError
 from .functional import ComposedFunctional, Functional
 from .gridbasis import GridBasis
 from .utils import GeneralizedDiagonalizer
@@ -135,5 +135,5 @@ def solve_scf(  # noqa: C901 TODO too complex
             alpha = alpha * alpha_decay
         energy_prev = energy
     else:
-        raise SCFNotConverged(P_out, energy)
+        raise SCFNotConvergedError(P_out, energy)
     return P_out.detach(), energy.detach()

@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from .basis import Basis
-from .errors import SCFNotConverged
+from .errors import SCFNotConvergedError
 from .functional import ComposedFunctional, Functional
 from .scf import solve_scf
 from .utils import SystemBatch
@@ -106,7 +106,7 @@ def training_step(
             create_graph=True,
             **kwargs,
         )
-    except SCFNotConverged:
+    except SCFNotConvergedError:
         pass
     E_pred = log_dict["energy"][-1]
     n_pred = basis.density(log_dict["denmat"][-1])
