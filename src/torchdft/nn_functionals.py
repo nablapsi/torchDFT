@@ -184,3 +184,23 @@ class GlobalFunctionalNet(Functional):
             x = self.sig(density, x)
 
         return x.squeeze()
+
+
+class GgaConv1dFunctionalNet(Functional):
+    """Convolutional 1D NN GGA functional."""
+
+    def __init__(self, channels: List[int], negative_transform: bool = True):
+        super().__init__()
+
+        self.requires_grad = True
+
+        kernels = [1] * (len(channels) - 1)
+
+        self.conv1d = Conv1dPileLayers(channels, kernels, negative_transform)
+
+    def forward(self, den: Density) -> Tensor:
+        assert den.grad is not None
+        x = torch.stack((den.value, den.grad ** 2), dim=-2)
+        if len(x.shape) == 2:
+            x = x[None, :, :]
+        return self.conv1d(x)
