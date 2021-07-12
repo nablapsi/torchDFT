@@ -96,9 +96,8 @@ class Conv1dPileLayers(nn.Module):
         self.sign = -1 if negative_transform else 1
 
     def forward(self, x: Tensor) -> Tensor:
-        for layer in self.layers[:-1]:
+        for layer in self.layers:
             x = self.transfer(layer(x))
-        x = self.layers[-1](x)
         return (self.sign * x).squeeze()
 
 
