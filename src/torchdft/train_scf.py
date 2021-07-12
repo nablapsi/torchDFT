@@ -114,4 +114,4 @@ def training_step(
     n_loss = basis.density_mse(n_pred - n_truth) / N
     loss = E_loss + n_loss
     loss.backward()
-    return loss, E_loss, n_loss
+    return loss.detach(), E_loss.detach(), n_loss.detach()
