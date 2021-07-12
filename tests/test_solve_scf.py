@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict
 
 import torch
 from pyscf import dft, gto
@@ -161,7 +161,7 @@ def test_batched_solve_scf():
     for mode in ["KS", "OF"]:
         P_list, E_list = [], []
         for i, basis in enumerate(gridbasis):
-            log_dict: Dict[str, List[Tensor]] = {}
+            log_dict: Dict[str, Tensor] = {}
             occ = systems[i].occ(mode)
             try:
                 P, E = solve_scf(
@@ -170,8 +170,8 @@ def test_batched_solve_scf():
             except SCFNotConvergedError:
                 pass
 
-            P_list.append(log_dict["denmat"][-1])
-            E_list.append(log_dict["energy"][-1])
+            P_list.append(log_dict["denmat"])
+            E_list.append(log_dict["energy"])
 
         # Make two KS iterations with the batched version:
         occ = systembatch.occ(mode)
@@ -184,5 +184,5 @@ def test_batched_solve_scf():
             pass
 
         for i in range(systembatch.nbatch):
-            assert_allclose(P_list[i], log_dict["denmat"][-1][i])
-            assert_allclose(E_list[i], log_dict["energy"][-1][i])
+            assert_allclose(P_list[i], log_dict["denmat"][i])
+            assert_allclose(E_list[i], log_dict["energy"][i])

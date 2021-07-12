@@ -72,7 +72,7 @@ def solve_scf(  # noqa: C901 TODO too complex
     density_threshold: float = 1e-4,
     print_iterations: Union[bool, int] = False,
     enforce_symmetry: bool = False,
-    log_dict: Dict[str, List[Tensor]] = None,
+    log_dict: Dict[str, Tensor] = None,
     create_graph: bool = False,
     use_xitorch: bool = True,
     mixer: str = "linear",
@@ -94,9 +94,6 @@ def solve_scf(  # noqa: C901 TODO too complex
     if enforce_symmetry and isinstance(basis, GridBasis):
         P_in = basis.symmetrize_P(P_in)
     print_iterations = print_iterations if len(P_in.shape) == 2 else False
-    if log_dict is not None:
-        log_dict["energy"] = []
-        log_dict["denmat"] = []
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in iterations or range(max_iterations):
@@ -117,8 +114,8 @@ def solve_scf(  # noqa: C901 TODO too complex
             + basis.E_nuc
         )
         if log_dict is not None:
-            log_dict["energy"].append(energy)
-            log_dict["denmat"].append(P_out)
+            log_dict["energy"] = energy
+            log_dict["denmat"] = P_out
         density_diff = basis.density_mse(basis.density(P_out - P_in)).sqrt()
         if print_iterations and i % print_iterations == 0:
             print(

@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-from typing import Any, Callable, Dict, List, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, Tuple, TypeVar, Union
 
 import torch
 from torch import Tensor, nn
@@ -95,7 +95,7 @@ def training_step(
     n_truth: Tensor,
     **kwargs: Any,
 ) -> Tuple[Tensor, Tensor, Tensor]:
-    log_dict: Dict[str, List[Tensor]] = {}
+    log_dict: Dict[str, Tensor] = {}
     try:
         solve_scf(
             basis,
@@ -107,8 +107,8 @@ def training_step(
         )
     except SCFNotConvergedError:
         pass
-    E_pred = log_dict["energy"][-1]
-    n_pred = basis.density(log_dict["denmat"][-1])
+    E_pred = log_dict["energy"]
+    n_pred = basis.density(log_dict["denmat"])
     N = occ.sum()
     E_loss = ((E_pred - E_truth) ** 2).sum(-1) / N
     n_loss = basis.density_mse(n_pred - n_truth) / N
