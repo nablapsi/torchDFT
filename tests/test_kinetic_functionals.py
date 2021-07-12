@@ -25,4 +25,6 @@ class TestKineticFunctionals:
         grad_operator = get_gradient(grid) / dx
         density.grad = grad_operator.mv(density.value)
 
-        assert_allclose(1.0 / 8.0, VonWeizsaecker()(density).sum() * 0.1)
+        assert_allclose(
+            1.0 / 8.0, (VonWeizsaecker()(density) * density.value).sum() * 0.1
+        )

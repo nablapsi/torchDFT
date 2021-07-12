@@ -9,6 +9,10 @@ from .density import Density
 from .functional import Functional
 
 
+# TODO: TF and vW functionals are written as kinetic energy density, so they don't
+# have the usual form found in textbooks. This is because "get_functional_energy" works
+# with energy density. It would be nice to evaluate the kinetic functionals in their
+# usual way.
 class ThomasFermi1D(Functional):
     r"""Evaluate the Thomas Fermi kinetic energy density in one dimension.
 
@@ -39,4 +43,4 @@ class VonWeizsaecker(Functional):
 
     def forward(self, density: Density) -> Tensor:
         assert density.grad is not None
-        return 1.0 / 8.0 * density.grad ** 2 / density.value
+        return 1.0 / 8.0 * (density.grad / density.value) ** 2
