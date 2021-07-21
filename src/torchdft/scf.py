@@ -116,6 +116,7 @@ def solve_scf(  # noqa: C901 TODO too complex
         if log_dict is not None:
             log_dict["energy"] = energy
             log_dict["denmat"] = P_out
+            log_dict["scf_it"] = torch.tensor(i, dtype=torch.float)
         density_diff = basis.density_mse(basis.density(P_out - P_in)).sqrt()
         if print_iterations and i % print_iterations == 0:
             print(

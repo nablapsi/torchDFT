@@ -61,7 +61,9 @@ def train_functional(
                 )
                 for basis, occ, *data in zip(basis_list, occ_list, E_truth, n_truth)
             ]
-            loss, E_loss, n_loss = (torch.stack(x).mean() for x in zip(*losses))
+            losses = list(zip(*losses))
+            loss, E_loss, n_loss, scf_it_mean = (torch.stack(x).mean() for x in losses)
+            scf_it = losses[-1]
             if max_grad_norm > 0e0:
                 nn.utils.clip_grad_norm(
                     trainable_functional.parameters(), max_grad_norm
@@ -70,6 +72,15 @@ def train_functional(
                 writer.add_scalars(
                     "Losses",
                     {"E_loss": E_loss, "n_loss": n_loss, "Loss": loss},
+                    step,
+                )
+                writer.add_scalars(
+                    "SCF_iterations",
+                    {
+                        "max_it": max(scf_it),
+                        "min_it": min(scf_it),
+                        "mean_it": scf_it_mean,
+                    },
                     step,
                 )
             if checkpoint_freq and step % checkpoint_freq == 0:
@@ -94,7 +105,7 @@ def training_step(
     E_truth: Tensor,
     n_truth: Tensor,
     **kwargs: Any,
-) -> Tuple[Tensor, Tensor, Tensor]:
+) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
     log_dict: Dict[str, Tensor] = {}
     try:
         solve_scf(
@@ -109,9 +120,10 @@ def training_step(
         pass
     E_pred = log_dict["energy"]
     n_pred = basis.density(log_dict["denmat"])
+    scf_it = log_dict["scf_it"]
     N = occ.sum()
     E_loss = ((E_pred - E_truth) ** 2).sum(-1) / N
     n_loss = basis.density_mse(n_pred - n_truth) / N
     loss = E_loss + n_loss
     loss.backward()
-    return loss.detach(), E_loss.detach(), n_loss.detach()
+    return loss.detach(), E_loss.detach(), n_loss.detach(), scf_it
