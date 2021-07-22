@@ -103,3 +103,20 @@ class TestTrainScf:
                 requires_closure=True,
                 enforce_symmetry=True,
             )
+
+    def test_clip_gradients(self):
+        xc_nn = self.models[0]
+        optimizer = torch.optim.Adam(xc_nn.parameters(), lr=1e2)
+        train_functional(
+            basis_class=GridBasis,
+            functional=xc_nn,
+            optimizer=optimizer,
+            dataloader=self.dataloader,
+            max_epochs=1,
+            enforce_symmetry=True,
+            max_grad_norm=0.1,
+        )
+
+        param = xc_nn.parameters()
+        norm = torch.norm(torch.stack([torch.norm(p.grad.detach()) for p in param]))
+        assert norm.item() <= 0.1
