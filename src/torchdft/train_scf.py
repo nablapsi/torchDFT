@@ -122,7 +122,7 @@ def training_step(
     n_pred = basis.density(log_dict["denmat"])
     scf_it = log_dict["scf_it"]
     N = occ.sum()
-    E_loss = ((E_pred - E_truth) ** 2).sum(-1) / N
+    E_loss = ((E_pred - E_truth) ** 2) / N
     n_loss = basis.density_mse(n_pred - n_truth) / N
     loss = E_loss + n_loss
     loss.backward()
