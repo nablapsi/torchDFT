@@ -63,7 +63,7 @@ def train_functional(
             losses = list(zip(*losses))
             loss, E_loss, n_loss, scf_it_mean = (torch.stack(x).mean() for x in losses)
             scf_it = losses[-1]
-            if max_grad_norm:
+            if max_grad_norm is not None:
                 nn.utils.clip_grad_norm(functional.parameters(), max_grad_norm)
             if writer:
                 writer.add_scalars(
