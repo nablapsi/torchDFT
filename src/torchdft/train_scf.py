@@ -32,7 +32,7 @@ def train_functional(
     mode: str = "KS",
     requires_closure: bool = False,
     writer: SummaryWriter = None,
-    max_grad_norm: float = 0e0,
+    max_grad_norm: float = None,
     **kwargs: Any,
 ) -> float:
     """Train a functional."""
@@ -63,7 +63,7 @@ def train_functional(
             losses = list(zip(*losses))
             loss, E_loss, n_loss, scf_it_mean = (torch.stack(x).mean() for x in losses)
             scf_it = losses[-1]
-            if max_grad_norm > 0e0:
+            if max_grad_norm:
                 nn.utils.clip_grad_norm(functional.parameters(), max_grad_norm)
             if writer:
                 writer.add_scalars(
