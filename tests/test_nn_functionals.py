@@ -2,15 +2,16 @@ import torch
 from torch.testing import assert_allclose
 
 from torchdft.density import Density
-from torchdft.gridbasis import get_hartree_potential
+from torchdft.gridbasis import GridBasis, get_hartree_potential
 from torchdft.nn_functionals import (
     Conv1dFunctionalNet,
     Conv1dPileLayers,
+    GgaConv1dFunctionalNet,
     GlobalConvolutionalLayer,
     GlobalFunctionalNet,
     SigLayer,
 )
-from torchdft.utils import exp_coulomb, gaussian
+from torchdft.utils import System, exp_coulomb, gaussian
 
 
 class TestSigLayer:
@@ -134,3 +135,22 @@ class TestGlobalFunctionalNet:
         )
 
         _ = net(self.density)
+
+
+class TestGgaConv1dFunctionalNet:
+    grid = torch.arange(-10, 10, 1)
+    system = System(
+        centers=torch.tensor([0.0]),
+        charges=torch.tensor([1]),
+        n_electrons=1,
+        grid=grid,
+    )
+
+    basis = GridBasis(system)
+
+    def test_forward(self):
+        net = GgaConv1dFunctionalNet(channels=[2, 16, 16, 1], negative_transform=True)
+        density = Density(torch.rand((3, self.grid.shape[0])))
+        density.grad = self.basis._get_density_gradient(density.value)
+
+        _ = net(density)
