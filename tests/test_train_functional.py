@@ -115,7 +115,7 @@ class TestTrainScf:
             dataloader=self.dataloader,
             max_epochs=1,
             enforce_symmetry=True,
-            max_grad_norm=0.1,
+            max_grad_norm=1e-5,
         )
 
         param = xc_nn.parameters()
