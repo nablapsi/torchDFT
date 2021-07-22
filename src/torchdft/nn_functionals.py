@@ -191,6 +191,7 @@ class GgaConv1dFunctionalNet(Functional):
     def __init__(self, channels: List[int], negative_transform: bool = True):
         super().__init__()
 
+        assert channels[0] == 2
         self.requires_grad = True
 
         kernels = [1] * (len(channels) - 1)
