@@ -1,8 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
-from typing import Any, Callable, Dict, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, List, Tuple, TypeVar, Union
 
 import torch
 from torch import Tensor, nn
@@ -18,6 +17,9 @@ from .utils import SystemBatch
 __all__ = ["train_functional"]
 
 T_co = TypeVar("T_co", covariant=True)
+LossFn = Callable[
+    [Basis, Tensor, Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]
+]
 
 
 def train_functional(
@@ -52,18 +54,21 @@ def train_functional(
                     basis,
                     occ,
                     functional,
+                    energy_density_loss,
                     *data,
                     max_iterations=max_iterations,
                     **kwargs,
                 )
                 for basis, occ, *data in zip(basis_list, occ_list, E_truth, n_truth)
             ]
-            losses = list(zip(*losses))
-            loss, E_loss, n_loss, scf_it_mean = (torch.stack(x).mean() for x in losses)
-            scf_it = losses[-1]
+            loss, metrics = list(zip(*losses))
+            loss = torch.stack(loss).mean()
+            metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
             if max_grad_norm is not None:
                 nn.utils.clip_grad_norm(functional.parameters(), max_grad_norm)
             if writer:
+                E_loss = metrics["E_loss"].mean()
+                n_loss = metrics["n_loss"].mean()
                 writer.add_scalars(
                     "Losses",
                     {"E_loss": E_loss, "n_loss": n_loss, "Loss": loss},
@@ -72,9 +77,9 @@ def train_functional(
                 writer.add_scalars(
                     "SCF_iterations",
                     {
-                        "max_it": max(scf_it),
-                        "min_it": min(scf_it),
-                        "mean_it": scf_it_mean,
+                        "max_it": metrics["scf_it"].max(),
+                        "min_it": metrics["scf_it"].min(),
+                        "mean_it": metrics["scf_it"].mean(),
                     },
                     step,
                 )
@@ -102,32 +107,46 @@ def train_functional(
     return loss
 
 
+def energy_density_loss(
+    basis: Basis,
+    N: Tensor,
+    E_pred: Tensor,
+    n_pred: Tensor,
+    E_truth: Tensor,
+    n_truth: Tensor,
+) -> Tuple[Tensor, Dict[str, Tensor]]:
+    E_loss = (E_pred[-1] - E_truth) ** 2 / N
+    n_loss = basis.density_mse(n_pred[-1] - n_truth) / N
+    loss = E_loss + n_loss
+    return loss, {"n_loss": n_loss.detach(), "E_loss": E_loss.detach()}
+
+
 def training_step(
     basis: Basis,
     occ: Tensor,
     functional: Functional,
+    loss_fn: LossFn,
     E_truth: Tensor,
     n_truth: Tensor,
     **kwargs: Any,
-) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-    log_dict: Dict[str, Tensor] = {}
+) -> Tuple[Tensor, Dict[str, Tensor]]:
+    tape: List[Tuple[Tensor, Tensor]] = []
     try:
         solve_scf(
             basis,
             occ,
             functional,
-            log_dict=log_dict,
+            tape=tape,
             create_graph=True,
             **kwargs,
         )
     except SCFNotConvergedError:
         pass
-    E_pred = log_dict["energy"]
-    n_pred = basis.density(log_dict["denmat"])
-    scf_it = log_dict["scf_it"]
-    N = occ.sum()
-    E_loss = ((E_pred - E_truth) ** 2) / N
-    n_loss = basis.density_mse(n_pred - n_truth) / N
-    loss = E_loss + n_loss
+    n_pred, E_pred = list(zip(*tape))
+    E_pred = torch.stack(E_pred)
+    n_pred = basis.density(torch.stack(n_pred))
+    loss, metrics = loss_fn(basis, occ.sum(dim=-1), E_pred, n_pred, E_truth, n_truth)
+    assert not any(v.grad_fn for v in metrics.values())
     loss.backward()
-    return loss.detach(), E_loss.detach(), n_loss.detach(), scf_it
+    metrics["scf_it"] = torch.tensor(len(tape))
+    return loss.detach(), metrics
