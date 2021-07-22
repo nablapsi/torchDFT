@@ -105,6 +105,7 @@ class TestTrainScf:
             )
 
     def test_clip_gradients(self):
+        eps = 1e-6
         xc_nn = self.models[0]
         optimizer = torch.optim.Adam(xc_nn.parameters(), lr=1e2)
         train_functional(
@@ -119,4 +120,4 @@ class TestTrainScf:
 
         param = xc_nn.parameters()
         norm = torch.norm(torch.stack([torch.norm(p.grad.detach()) for p in param]))
-        assert norm.item() <= 0.1
+        assert norm.item() <= 0.1 + eps
