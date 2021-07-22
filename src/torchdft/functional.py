@@ -29,9 +29,7 @@ class ComposedFunctional(Functional):
         super().__init__()
         self.functionals = nn.ModuleList(functionals)
         self.factors = factors if factors is not None else [1] * len(functionals)
-        self.requires_grad = any(
-            [functional.requires_grad for functional in functionals]
-        )
+        self.requires_grad = any(functional.requires_grad for functional in functionals)
 
     def forward(self, density: Density) -> Tensor:
         epsilon = torch.stack(
