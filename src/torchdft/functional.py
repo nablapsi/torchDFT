@@ -20,7 +20,7 @@ class Functional(nn.Module):
         pass
 
 
-class ComposedFunctional(nn.Module):
+class ComposedFunctional(Functional):
     """Linear combination of density functionals."""
 
     def __init__(

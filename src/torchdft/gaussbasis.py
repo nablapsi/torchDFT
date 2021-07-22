@@ -10,7 +10,7 @@ from torch import Tensor, from_numpy as fnp
 
 from .basis import Basis
 from .density import Density
-from .functional import ComposedFunctional, Functional
+from .functional import Functional
 
 
 def _bapply(func, *xs):  # type: ignore
@@ -73,7 +73,7 @@ class GaussianBasis(Basis):
     def get_int_integrals(
         self,
         P: Tensor,
-        functional: Union[Functional, ComposedFunctional],
+        functional: Functional,
         create_graph: bool = False,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         V_H = torch.einsum("...ijkl,...kl->...ij", self.eri, P)

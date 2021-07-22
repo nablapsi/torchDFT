@@ -9,7 +9,7 @@ from torch import Tensor
 from .basis import Basis
 from .density import Density
 from .errors import NanError
-from .functional import ComposedFunctional, Functional
+from .functional import Functional
 from .utils import System, SystemBatch, exp_coulomb, get_dx
 
 
@@ -50,7 +50,7 @@ class GridBasis(Basis):
     def get_int_integrals(
         self,
         P: Tensor,
-        functional: Union[Functional, ComposedFunctional],
+        functional: Functional,
         create_graph: bool = False,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """Evaluate Hartree and extra potential contributions.
@@ -226,7 +226,7 @@ def get_external_potential(
 
 
 def get_functional_energy(
-    density: Density, grid: Tensor, functional: Union[Functional, ComposedFunctional]
+    density: Density, grid: Tensor, functional: Functional
 ) -> Tensor:
     """Evaluate functional energy."""
     dx = get_dx(grid)
@@ -237,7 +237,7 @@ def get_functional_energy(
 def get_functional_energy_potential(
     density: Density,
     grid: Tensor,
-    functional: Union[Functional, ComposedFunctional],
+    functional: Functional,
     create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Evaluate functional potential."""

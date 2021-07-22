@@ -10,7 +10,7 @@ from torch import Tensor
 
 from .basis import Basis
 from .errors import SCFNotConvergedError
-from .functional import ComposedFunctional, Functional
+from .functional import Functional
 from .gridbasis import GridBasis
 from .utils import GeneralizedDiagonalizer
 
@@ -64,7 +64,7 @@ class DIIS:
 def solve_scf(  # noqa: C901 TODO too complex
     basis: Basis,
     occ: Tensor,
-    functional: Union[Functional, ComposedFunctional],
+    functional: Functional,
     alpha: float = 0.5,
     alpha_decay: float = 1.0,
     max_iterations: int = 100,
