@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Dict, Iterable, List, Tuple, Union
+from typing import Iterable, List, Tuple, Union
 
 import torch
 import xitorch
@@ -72,7 +72,7 @@ def solve_scf(  # noqa: C901 TODO too complex
     density_threshold: float = 1e-4,
     print_iterations: Union[bool, int] = False,
     enforce_symmetry: bool = False,
-    log_dict: Dict[str, Tensor] = None,
+    tape: List[Tuple[Tensor, Tensor]] = None,
     create_graph: bool = False,
     use_xitorch: bool = True,
     mixer: str = "linear",
@@ -113,10 +113,8 @@ def solve_scf(  # noqa: C901 TODO too complex
             - ((V_H / 2 + V_func) * P_in).sum((-2, -1))
             + basis.E_nuc
         )
-        if log_dict is not None:
-            log_dict["energy"] = energy
-            log_dict["denmat"] = P_out
-            log_dict["scf_it"] = torch.tensor(i, dtype=torch.float)
+        if tape is not None:
+            tape.append((P_out, energy))
         density_diff = basis.density_mse(basis.density(P_out - P_in)).sqrt()
         if print_iterations and i % print_iterations == 0:
             print(
