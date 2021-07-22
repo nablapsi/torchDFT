@@ -27,7 +27,7 @@ class ComposedFunctional(Functional):
         self, functionals: List[Functional], factors: Optional[List[float]] = None
     ):
         super().__init__()
-        self.functionals = functionals
+        self.functionals = nn.ModuleList(functionals)
         self.factors = factors if factors is not None else [1] * len(functionals)
         self.requires_grad = any(
             [functional.requires_grad for functional in functionals]
