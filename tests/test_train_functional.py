@@ -67,7 +67,6 @@ class TestTrainScf:
             train_functional(
                 basis_class=GridBasis,
                 functional=xc_nn,
-                trainable_functional=xc_nn,
                 optimizer=optimizer,
                 dataloader=self.dataloader,
                 max_epochs=1,
@@ -76,7 +75,6 @@ class TestTrainScf:
             train_functional(
                 basis_class=GridBasis,
                 functional=xc_nn,
-                trainable_functional=xc_nn,
                 optimizer=optimizer,
                 dataloader=self.dataloader,
                 max_epochs=1,
@@ -90,7 +88,6 @@ class TestTrainScf:
             train_functional(
                 basis_class=GridBasis,
                 functional=xc_nn,
-                trainable_functional=xc_nn,
                 optimizer=optimizer,
                 dataloader=self.dataloader,
                 max_epochs=1,
@@ -100,7 +97,6 @@ class TestTrainScf:
             train_functional(
                 basis_class=GridBasis,
                 functional=xc_nn,
-                trainable_functional=xc_nn,
                 optimizer=optimizer,
                 dataloader=self.dataloader,
                 max_epochs=1,

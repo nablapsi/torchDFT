@@ -23,7 +23,6 @@ T_co = TypeVar("T_co", covariant=True)
 def train_functional(
     basis_class: Callable[[SystemBatch], Basis],
     functional: Functional,
-    trainable_functional: nn.Module,
     optimizer: torch.optim.Optimizer,
     dataloader: DataLoader[T_co],
     alpha_decay: float = 0.9,
@@ -65,9 +64,7 @@ def train_functional(
             loss, E_loss, n_loss, scf_it_mean = (torch.stack(x).mean() for x in losses)
             scf_it = losses[-1]
             if max_grad_norm > 0e0:
-                nn.utils.clip_grad_norm(
-                    trainable_functional.parameters(), max_grad_norm
-                )
+                nn.utils.clip_grad_norm(functional.parameters(), max_grad_norm)
             if writer:
                 writer.add_scalars(
                     "Losses",
@@ -84,7 +81,7 @@ def train_functional(
                     step,
                 )
             if checkpoint_freq and step % checkpoint_freq == 0:
-                torch.save(trainable_functional.state_dict(), f"checkpoint_{step}.pth")
+                torch.save(functional.state_dict(), f"checkpoint_{step}.pth")
             step += 1
             return loss.item()
 
