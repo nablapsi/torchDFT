@@ -25,7 +25,6 @@ def train_functional(
     functional: Functional,
     optimizer: torch.optim.Optimizer,
     dataloader: DataLoader[T_co],
-    alpha_decay: float = 0.9,
     checkpoint_freq: Union[bool, int] = False,
     max_epochs: int = 10,
     max_iterations: int = 15,
@@ -55,7 +54,6 @@ def train_functional(
                     functional,
                     *data,
                     max_iterations=max_iterations,
-                    alpha_decay=alpha_decay,
                     **kwargs,
                 )
                 for basis, occ, *data in zip(basis_list, occ_list, E_truth, n_truth)
