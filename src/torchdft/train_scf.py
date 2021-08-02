@@ -78,6 +78,15 @@ def train_functional(
                     },
                     step,
                 )
+                parameters = [p for p in functional.parameters() if p.grad is not None]
+                total_norm = torch.norm(
+                    torch.stack([torch.norm(p.grad.detach()) for p in parameters])
+                )
+                writer.add_scalars(
+                    "Gradients",
+                    {"grad_norm": total_norm},
+                    step,
+                )
             if checkpoint_freq and step % checkpoint_freq == 0:
                 torch.save(functional.state_dict(), f"checkpoint_{step}.pth")
             step += 1
