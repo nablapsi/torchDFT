@@ -115,8 +115,8 @@ def energy_density_loss(
     E_truth: Tensor,
     n_truth: Tensor,
 ) -> Tuple[Tensor, Dict[str, Tensor]]:
-    E_loss = (E_pred[-1] - E_truth) ** 2 / N
-    n_loss = basis.density_mse(n_pred[-1] - n_truth) / N
+    E_loss = ((E_pred[-1] - E_truth) ** 2 / N).mean()
+    n_loss = (basis.density_mse(n_pred[-1] - n_truth) / N).mean()
     loss = E_loss + n_loss
     return loss, {"n_loss": n_loss.detach(), "E_loss": E_loss.detach()}
 
