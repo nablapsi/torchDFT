@@ -90,7 +90,10 @@ class GaussianBasis(Basis):
                 .sum(dim=-1)
                 .norm(dim=-2)
             )
-        E_func = (density.value * functional(density) * self.grid_weights).sum(dim=-1)
+        E_func = functional(density)
+        if functional.per_electron:
+            E_func = density.value * E_func
+        E_func = (E_func * self.grid_weights).sum(dim=-1)
         (V_func,) = torch.autograd.grad(
             E_func, P, torch.ones_like(E_func), create_graph=create_graph
         )

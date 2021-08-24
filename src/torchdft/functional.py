@@ -14,6 +14,7 @@ class Functional(nn.Module, ABC):
     """Represents a density functional."""
 
     requires_grad: bool
+    per_electron = True
 
     @abstractmethod
     def forward(self, density: Density) -> Tensor:
