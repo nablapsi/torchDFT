@@ -6,6 +6,7 @@ from typing import Callable, List, Optional
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
 
 from .density import Density
@@ -204,3 +205,49 @@ class GgaConv1dFunctionalNet(Functional):
         if len(x.shape) == 2:
             x = x[None, :, :]
         return self.conv1d(x)
+
+
+class TrainableLDA(Functional):
+    """Trainable LDA."""
+
+    requires_grad = False
+    per_electron = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(1, 64),
+            nn.SiLU(),
+            nn.Linear(64, 64),
+            nn.SiLU(),
+            nn.Linear(64, 1),
+        )
+
+    def forward(self, density: Density) -> Tensor:
+        log_n = density.value.log()
+        x = log_n.unsqueeze(dim=-1)
+        return -F.softplus(log_n * 4 / 3 + self.mlp(x).squeeze(dim=-1))
+
+
+class TrainableGGA(Functional):
+    """Trainable GGA."""
+
+    requires_grad = True
+    per_electron = False
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(2, 64),
+            nn.SiLU(),
+            nn.Linear(64, 64),
+            nn.SiLU(),
+            nn.Linear(64, 1),
+        )
+
+    def forward(self, density: Density) -> Tensor:
+        assert density.grad is not None
+        log_n = density.value.log()
+        log_grad = density.grad.log()
+        x = torch.stack([log_n, log_grad], dim=-1)
+        return -F.softplus(log_n * 4 / 3 + self.mlp(x).squeeze(dim=-1))

@@ -7,6 +7,7 @@ import torch
 from torch import Tensor, nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm.auto import tqdm
 
 from .basis import Basis
 from .errors import SCFNotConvergedError
@@ -105,6 +106,37 @@ def train_functional(
 
     loss = closure()
     return loss
+
+
+def train_with_lbfgs(
+    basis: Basis,
+    occ: Tensor,
+    xc: Functional,
+    data: Tuple[Tensor, Tensor],
+    max_eval: int = 200,
+    **kwargs: Any,
+) -> None:
+    def loss_fn(*args: Any) -> Tuple[Tensor, Dict[str, Tensor]]:
+        loss, metrics = energy_density_loss(*args)
+        return loss.sqrt(), metrics
+
+    opt = torch.optim.LBFGS(
+        xc.parameters(),
+        line_search_fn="strong_wolfe",
+        max_eval=max_eval,
+        max_iter=max_eval,
+    )
+
+    with tqdm(total=max_eval) as pbar:
+
+        def closure() -> float:
+            opt.zero_grad()
+            loss, _ = training_step(basis, occ, xc, loss_fn, *data, **kwargs)
+            pbar.update()
+            pbar.set_postfix(loss=loss.item())
+            return loss.item()
+
+        opt.step(closure)
 
 
 def energy_density_loss(
