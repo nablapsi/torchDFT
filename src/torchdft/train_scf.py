@@ -18,8 +18,9 @@ from .utils import SystemBatch
 __all__ = ["train_functional"]
 
 T_co = TypeVar("T_co", covariant=True)
+Metrics = Dict[str, Tensor]
 LossFn = Callable[
-    [Basis, Tensor, Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Dict[str, Tensor]]
+    [Basis, Tensor, Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Metrics]
 ]
 
 
@@ -146,11 +147,14 @@ def energy_density_loss(
     n_pred: Tensor,
     E_truth: Tensor,
     n_truth: Tensor,
-) -> Tuple[Tensor, Dict[str, Tensor]]:
-    E_loss = ((E_pred[-1] - E_truth) ** 2 / N).mean()
-    n_loss = (basis.density_mse(n_pred[-1] - n_truth) / N).mean()
-    loss = E_loss + n_loss
-    return loss, {"n_loss": n_loss.detach(), "E_loss": E_loss.detach()}
+) -> Tuple[Tensor, Metrics]:
+    E_loss_sq = ((E_pred[-1] - E_truth) ** 2 / N).mean()
+    n_loss_sq = (basis.density_mse(n_pred[-1] - n_truth) / N).mean()
+    loss_sq = E_loss_sq + n_loss_sq
+    return loss_sq.sqrt(), {
+        "n_loss": n_loss_sq.detach().sqrt(),
+        "E_loss": E_loss_sq.detach().sqrt(),
+    }
 
 
 def training_step(
@@ -161,7 +165,7 @@ def training_step(
     E_truth: Tensor,
     n_truth: Tensor,
     **kwargs: Any,
-) -> Tuple[Tensor, Dict[str, Tensor]]:
+) -> Tuple[Tensor, Metrics]:
     tape: List[Tuple[Tensor, Tensor]] = []
     try:
         solve_scf(
