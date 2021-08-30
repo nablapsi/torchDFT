@@ -1,8 +1,25 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Any, Callable, Dict, List, Tuple, TypeVar, Union
+from __future__ import annotations
 
+import logging
+import sys
+import time
+from pathlib import Path
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
+
+import numpy as np
 import torch
 from torch import Tensor, nn
 from torch.utils.data import DataLoader
@@ -22,6 +39,8 @@ Metrics = Dict[str, Tensor]
 LossFn = Callable[
     [Basis, Tensor, Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Metrics]
 ]
+
+log = logging.getLogger(__name__)
 
 
 def train_functional(
@@ -109,37 +128,6 @@ def train_functional(
     return loss
 
 
-def train_with_lbfgs(
-    basis: Basis,
-    occ: Tensor,
-    xc: Functional,
-    data: Tuple[Tensor, Tensor],
-    max_eval: int = 200,
-    **kwargs: Any,
-) -> None:
-    def loss_fn(*args: Any) -> Tuple[Tensor, Dict[str, Tensor]]:
-        loss, metrics = energy_density_loss(*args)
-        return loss.sqrt(), metrics
-
-    opt = torch.optim.LBFGS(
-        xc.parameters(),
-        line_search_fn="strong_wolfe",
-        max_eval=max_eval,
-        max_iter=max_eval,
-    )
-
-    with tqdm(total=max_eval) as pbar:
-
-        def closure() -> float:
-            opt.zero_grad()
-            loss, _ = training_step(basis, occ, xc, loss_fn, *data, **kwargs)
-            pbar.update()
-            pbar.set_postfix(loss=loss.item())
-            return loss.item()
-
-        opt.step(closure)
-
-
 def energy_density_loss(
     basis: Basis,
     N: Tensor,
@@ -184,5 +172,160 @@ def training_step(
     loss, metrics = loss_fn(basis, occ.sum(dim=-1), E_pred, n_pred, E_truth, n_truth)
     assert not any(v.grad_fn for v in metrics.values())
     loss.backward()
-    metrics["scf_it"] = torch.tensor(len(tape))
+    metrics["SCF/iter"] = torch.tensor(len(tape))
     return loss.detach(), metrics
+
+
+class SCFData(NamedTuple):
+    energy: Tensor
+    density: Tensor
+
+    def to(self, device: Optional[str]) -> SCFData:
+        return SCFData(self.energy.to(device), self.density.to(device))
+
+
+class TqdmStream:
+    def write(self, msg: str) -> int:
+        try:
+            tqdm.write(msg, end="")
+        except BrokenPipeError:
+            sys.stderr.write(msg)
+            return 0
+        return len(msg)
+
+
+class CheckpointStore:
+    def __init__(self) -> None:
+        self.chkpts: List[Path] = []
+
+    def replace(self, state: Dict[str, Any], path: Path) -> None:
+        self.chkpts.append(path)
+        torch.save(state, self.chkpts[-1])
+        while len(self.chkpts) > 1:
+            self.chkpts.pop(0).unlink()
+
+
+class TrainingTask:
+    def __init__(
+        self,
+        functional: Functional,
+        basis: Basis,
+        occ: Tensor,
+        data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
+        steps: int = 200,
+        **kwargs: Any,
+    ) -> None:
+        energy, density = data
+        energy = torch.as_tensor(energy)
+        self.functional = functional
+        self.basis = basis
+        self.occ = occ
+        self.data = SCFData(energy, density)
+        self.steps = steps
+        self.kwargs = kwargs
+
+    def eval_model(self) -> Tuple[SCFData, Metrics]:
+        tape: List[Tuple[Tensor, Tensor]] = []
+        try:
+            solve_scf(
+                self.basis,
+                self.occ,
+                self.functional,
+                tape=tape,
+                create_graph=True,
+                **self.kwargs,
+            )
+        except SCFNotConvergedError:
+            pass
+        metrics = {"SCF/iter": torch.tensor(len(tape))}
+        n_pred, E_pred = list(zip(*tape))
+        E_pred = torch.stack(E_pred)
+        n_pred = self.basis.density(torch.stack(n_pred))
+        return SCFData(E_pred, n_pred), metrics
+
+    def metrics_fn(self) -> Metrics:
+        data, metrics = self.eval_model()
+        N = self.occ.sum(dim=-1)
+        energy_loss_sq = ((data.energy[-1] - self.data.energy) ** 2 / N).mean()
+        density_loss_sq = (
+            self.basis.density_mse(data.density[-1] - self.data.density) / N
+        ).mean()
+        loss = (energy_loss_sq + density_loss_sq).sqrt()
+        metrics["loss"] = loss
+        metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
+        metrics["loss/density"] = density_loss_sq.detach().sqrt()
+        return metrics
+
+    def training_step(self) -> Metrics:
+        metrics = self.metrics_fn()
+        loss = metrics["loss"]
+        loss.backward()
+        loss.detach_()
+        assert not any(v.grad_fn for v in metrics.values())
+        return metrics
+
+    def train(self, workdir: str, device: str = "cuda", seed: int = 0) -> None:
+        workdir = Path(workdir)
+        if seed is not None:
+            log.info(f"Setting random seed: {seed}")
+            torch.manual_seed(seed)
+        writer = SummaryWriter(log_dir=workdir)
+        log.info(f"Moving to device ({device})...")
+        self.functional.to(device)
+        self.basis.to(device)
+        self.occ = self.occ.to(device)
+        self.data = self.data.to(device)
+        chkpt = CheckpointStore()
+        opt = torch.optim.LBFGS(
+            self.functional.parameters(),
+            line_search_fn="strong_wolfe",
+            max_eval=self.steps,
+            max_iter=self.steps,
+            tolerance_change=np.nan,
+        )
+        log.info("Initialized training")
+        step = 0
+        last_log = 0.0
+        metrics = None
+        with tqdm(total=self.steps, disable=None) as pbar:
+
+            def closure() -> float:
+                nonlocal step, last_log, metrics
+                opt.zero_grad()
+                metrics = self.training_step()
+                assert not any(v.grad_fn for v in metrics.values())
+                pbar.update()
+                pbar.set_postfix(loss=f"{metrics['loss'].item():.2e}")
+                now = time.time()
+                if now - last_log > 60:
+                    log.info(
+                        f"Progress: {step}/{self.steps}"
+                        f', loss = {metrics["loss"]:.2e}'
+                    )
+                    last_log = now
+                    chkpt.replace(
+                        self.functional.state_dict(),
+                        workdir / f"chkpt-{step}.pt",  # type: ignore
+                    )
+                with torch.no_grad():
+                    self.after_step(step, metrics, writer)
+                step += 1
+                return metrics["loss"].item()
+
+            opt.step(closure)
+
+        torch.save(metrics, workdir / "metrics.pt")
+
+    def after_step(
+        self, step: int, metrics: Dict[str, Tensor], writer: SummaryWriter
+    ) -> None:
+        for k, v in metrics.items():
+            writer.add_scalar(k, v, step)
+        grad_norm = torch.cat(
+            [
+                p.grad.flatten()
+                for p in self.functional.parameters()
+                if p.grad is not None
+            ]
+        ).norm()
+        writer.add_scalar("grad/norm", grad_norm, step)
