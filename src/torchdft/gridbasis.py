@@ -19,6 +19,9 @@ class GridBasis(Basis):
     S: Tensor
     T: Tensor
     V_ext: Tensor
+    dx: Tensor
+    grid: Tensor
+    E_nuc: Tensor
 
     def __init__(
         self,
@@ -90,8 +93,7 @@ class GridBasis(Basis):
         return torch.einsum("ij, ...j -> ...i", grad_operator, density)
 
     def density_mse(self, density: Tensor) -> Tensor:
-        dx = get_dx(self.grid)
-        return density.pow(2).sum(dim=-1) * dx
+        return density.pow(2).sum(dim=-1) * self.dx
 
     def density(self, P: Tensor) -> Tensor:
         return P.diagonal(dim1=-2, dim2=-1)
