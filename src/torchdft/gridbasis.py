@@ -16,17 +16,22 @@ from .utils import System, SystemBatch, exp_coulomb, get_dx
 class GridBasis(Basis):
     """Basis of equidistant 1D grid."""
 
+    S: Tensor
+    T: Tensor
+    V_ext: Tensor
+
     def __init__(
         self,
         system: Union[System, SystemBatch],
         interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
     ):
+        super().__init__()
         self.system = system
-        self.grid = self.system.grid
         self.interaction_fn = interaction_fn
-        self.dx = get_dx(self.grid)
-
-        self.E_nuc = (
+        self.register_buffer("grid", self.system.grid)
+        self.register_buffer("dx", get_dx(self.grid))
+        self.register_buffer(
+            "E_nuc",
             (
                 (system.charges[..., None, :] * system.charges[..., None])
                 * interaction_fn(
@@ -34,18 +39,24 @@ class GridBasis(Basis):
                 )
             )
             .triu(diagonal=1)
-            .sum((-2, -1))
+            .sum((-2, -1)),
+        )
+        self.register_buffer("T", self.dx * get_kinetic_matrix(self.grid))
+        self.register_buffer(
+            "V_ext",
+            get_external_potential(
+                self.system.charges, self.system.centers, self.grid, self.interaction_fn
+            ).diag_embed(),
+        )
+        self.register_buffer(
+            "S",
+            torch.full_like(
+                self.V_ext[..., 0], self.dx.item(), device=self.grid.device
+            ).diag_embed(),
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
-        T = self.dx * get_kinetic_matrix(self.grid)
-        self.v_ext = get_external_potential(
-            self.system.charges, self.system.centers, self.grid, self.interaction_fn
-        )
-        S = torch.full_like(
-            self.v_ext, self.dx.item(), device=self.grid.device
-        ).diag_embed()
-        return S, T, self.dx * self.v_ext.diag_embed()
+        return self.S, self.T, self.dx * self.V_ext
 
     def get_int_integrals(
         self,

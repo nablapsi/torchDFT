@@ -128,10 +128,10 @@ class TestFunctionals:
         dx = get_dx(grid)
         density = Density(gaussian(grid, 1, 1))
 
-        _, pot = get_functional_energy_potential(density, grid, LDA)
-
         if not density.value.requires_grad:
             density.value = density.value.requires_grad_()
+        _, pot = get_functional_energy_potential(density, grid, LDA)
+
         ener = get_functional_energy(density, grid, LDA)
         ener.backward()
         assert_allclose(pot, density.value.grad / dx)
