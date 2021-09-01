@@ -73,6 +73,8 @@ class GridBasis(Basis):
               XC, kinetic, or linear combination of functionals.
             create_graph: Bool.
         """
+        if not P.requires_grad:
+            P = P.detach().requires_grad_()
         density = Density(self.density(P))
         if functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
@@ -252,8 +254,6 @@ def get_functional_energy_potential(
     create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Evaluate functional potential."""
-    if not density.value.requires_grad:
-        density = Density(density.value.detach().requires_grad_(), density.grad)
     dx = get_dx(grid)
     E_func = get_functional_energy(density, grid, functional)
     (v_func,) = torch.autograd.grad(
