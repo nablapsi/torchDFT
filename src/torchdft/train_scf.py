@@ -224,12 +224,12 @@ class TrainingTask:
         self.steps = steps
         self.kwargs = kwargs
 
-    def eval_model(self) -> Tuple[SCFData, Metrics]:
+    def eval_model(self, basis: Basis, occ: Tensor) -> Tuple[SCFData, Metrics]:
         tape: List[Tuple[Tensor, Tensor]] = []
         try:
             solve_scf(
-                self.basis,
-                self.occ,
+                basis,
+                occ,
                 self.functional,
                 tape=tape,
                 create_graph=True,
@@ -240,15 +240,15 @@ class TrainingTask:
         metrics = {"SCF/iter": torch.tensor(len(tape))}
         n_pred, E_pred = list(zip(*tape))
         E_pred = torch.stack(E_pred)
-        n_pred = self.basis.density(torch.stack(n_pred))
+        n_pred = basis.density(torch.stack(n_pred))
         return SCFData(E_pred, n_pred), metrics
 
-    def metrics_fn(self) -> Metrics:
-        data, metrics = self.eval_model()
+    def metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
+        data_pred, metrics = self.eval_model(basis, occ)
         N = self.occ.sum(dim=-1)
-        energy_loss_sq = ((data.energy[-1] - self.data.energy) ** 2 / N).mean()
+        energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
         density_loss_sq = (
-            self.basis.density_mse(data.density[-1] - self.data.density) / N
+            basis.density_mse(data_pred.density[-1] - data.density) / N
         ).mean()
         loss = (energy_loss_sq + density_loss_sq).sqrt()
         metrics["loss"] = loss
@@ -257,7 +257,7 @@ class TrainingTask:
         return metrics
 
     def training_step(self) -> Metrics:
-        metrics = self.metrics_fn()
+        metrics = self.metrics_fn(self.basis, self.occ, self.data)
         loss = metrics["loss"]
         loss.backward()
         loss.detach_()
