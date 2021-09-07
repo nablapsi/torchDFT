@@ -127,9 +127,8 @@ class TestFunctionals:
         grid = torch.arange(-5, 5, 0.1)
         dx = get_dx(grid)
         density = Density(gaussian(grid, 1, 1))
+        density.value = density.value.detach().requires_grad_()
 
-        if not density.value.requires_grad:
-            density.value = density.value.requires_grad_()
         _, pot = get_functional_energy_potential(density, grid, LDA)
 
         ener = get_functional_energy(density, grid, LDA)
