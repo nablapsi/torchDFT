@@ -345,6 +345,7 @@ class TrainingTask:
             opt.step(closure)
 
         torch.save(metrics, workdir / "metrics.pt")
+        chkpt.replace(self.functional.state_dict(), workdir / "model.pt")
 
     def after_step(
         self, step: int, metrics: Dict[str, Tensor], writer: SummaryWriter
