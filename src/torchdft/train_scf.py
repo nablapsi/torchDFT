@@ -39,6 +39,8 @@ log = logging.getLogger(__name__)
 
 
 class SCFData(NamedTuple):
+    """Class to hold energy and density points."""
+
     energy: Tensor
     density: Tensor
 
@@ -47,6 +49,8 @@ class SCFData(NamedTuple):
 
 
 class TqdmStream:
+    """Write message to progress bar."""
+
     def write(self, msg: str) -> int:
         try:
             tqdm.write(msg, end="")
@@ -57,6 +61,8 @@ class TqdmStream:
 
 
 class CheckpointStore:
+    """Class to manage model checkpoints."""
+
     def __init__(self) -> None:
         self.chkpts: List[Path] = []
 
@@ -68,6 +74,8 @@ class CheckpointStore:
 
 
 class TrainingTask:
+    """Class to create a training task."""
+
     def __init__(
         self,
         functional: Functional,
@@ -100,6 +108,7 @@ class TrainingTask:
     def eval_model(
         self, basis: Basis, occ: Tensor, create_graph: bool = False
     ) -> Tuple[SCFData, Metrics]:
+        """Evaluate model provided a basis and orbital occupation numbers."""
         tape: List[Tuple[Tensor, Tensor]] = []
         try:
             solve_scf(
@@ -121,6 +130,7 @@ class TrainingTask:
     def metrics_fn(
         self, basis: Basis, occ: Tensor, data: SCFData, create_graph: bool = False
     ) -> Metrics:
+        """Evaluate the losses on current model."""
         data_pred, metrics = self.eval_model(basis, occ, create_graph=create_graph)
         N = self.occ.sum(dim=-1)
         energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
@@ -136,6 +146,7 @@ class TrainingTask:
         return metrics
 
     def training_step(self) -> Metrics:
+        """Execute a training step."""
         metrics = [
             self.metrics_fn(basis, occ, SCFData(*data), create_graph=True)
             for basis, occ, *data in zip(
@@ -156,6 +167,7 @@ class TrainingTask:
         return metrics
 
     def train(self, workdir: str, device: str = "cuda", seed: int = 0) -> None:
+        """Execute training process of the model."""
         workdir = Path(workdir)
         if seed is not None:
             log.info(f"Setting random seed: {seed}")
@@ -211,6 +223,7 @@ class TrainingTask:
     def after_step(
         self, step: int, metrics: Dict[str, Tensor], writer: SummaryWriter
     ) -> None:
+        """After step tasks."""
         for k, v in metrics.items():
             writer.add_scalar(k, v, step)
         grad_norm = torch.cat(
