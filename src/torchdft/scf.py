@@ -1,7 +1,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from contextlib import nullcontext
 from typing import Iterable, List, Tuple, Union
 
 import torch
@@ -34,13 +33,12 @@ def ks_iteration(
 
 
 class DIIS:
-    def __init__(self, S: Tensor, max_history: int = 10, no_grad: bool = True) -> None:
+    def __init__(self, S: Tensor, max_history: int = 10) -> None:
         self.S = S
         S, U = torch.linalg.eigh(S)
         self.X = U @ (1 / S.sqrt()).diag_embed()
         self.max_history = max_history
         self.history: List[Tuple[Tensor, Tensor]] = []
-        self.no_grad = no_grad
 
     def _get_coeffs(self, P: Tensor, F: Tensor) -> Tensor:
         err = self.X.transpose(-1, -2) @ (F @ P @ self.S - self.S @ P @ F) @ self.X
@@ -60,8 +58,7 @@ class DIIS:
         return torch.linalg.solve(B, y)[..., :-1]
 
     def step(self, P: Tensor, F: Tensor) -> Tensor:
-        with torch.no_grad() if self.no_grad else nullcontext():
-            c = self._get_coeffs(P, F)
+        c = self._get_coeffs(P, F)
         F = torch.stack([F for F, _ in self.history], dim=-1)
         F = (c[..., None, None, :] * F).sum(dim=-1)
         return F
