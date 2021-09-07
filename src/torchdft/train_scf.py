@@ -224,7 +224,9 @@ class TrainingTask:
         self.steps = steps
         self.kwargs = kwargs
 
-    def eval_model(self, basis: Basis, occ: Tensor) -> Tuple[SCFData, Metrics]:
+    def eval_model(
+        self, basis: Basis, occ: Tensor, create_graph: bool = False
+    ) -> Tuple[SCFData, Metrics]:
         tape: List[Tuple[Tensor, Tensor]] = []
         try:
             solve_scf(
@@ -232,7 +234,7 @@ class TrainingTask:
                 occ,
                 self.functional,
                 tape=tape,
-                create_graph=True,
+                create_graph=create_graph,
                 **self.kwargs,
             )
         except SCFNotConvergedError:
@@ -243,8 +245,10 @@ class TrainingTask:
         n_pred = basis.density(torch.stack(n_pred))
         return SCFData(E_pred, n_pred), metrics
 
-    def metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
-        data_pred, metrics = self.eval_model(basis, occ)
+    def metrics_fn(
+        self, basis: Basis, occ: Tensor, data: SCFData, create_graph: bool = False
+    ) -> Metrics:
+        data_pred, metrics = self.eval_model(basis, occ, create_graph=create_graph)
         N = self.occ.sum(dim=-1)
         energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
         density_loss_sq = (
@@ -257,7 +261,7 @@ class TrainingTask:
         return metrics
 
     def training_step(self) -> Metrics:
-        metrics = self.metrics_fn(self.basis, self.occ, self.data)
+        metrics = self.metrics_fn(self.basis, self.occ, self.data, create_graph=True)
         loss = metrics["loss"]
         loss.backward()
         loss.detach_()
