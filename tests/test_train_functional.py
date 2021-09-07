@@ -1,10 +1,10 @@
-import torch
-from torch.utils.data import DataLoader
+import shutil
 
-from torchdft.dataset import SystemDataSet, collate_fn
+import torch
+
 from torchdft.gridbasis import GridBasis
 from torchdft.nn_functionals import Conv1dFunctionalNet, GlobalFunctionalNet
-from torchdft.train_scf import train_functional
+from torchdft.train_scf import SCFData, TrainingTask
 from torchdft.utils import System, exp_coulomb
 
 
@@ -18,10 +18,10 @@ class TestTrainScf:
 
     models = [
         Conv1dFunctionalNet(
-            window_size=1, channels=[1, 16, 16, 1], negative_transform=True
+            window_size=1, channels=[1, 16, 1], negative_transform=True
         ),
         Conv1dFunctionalNet(
-            window_size=3, channels=[1, 16, 16, 1], negative_transform=True
+            window_size=3, channels=[1, 16, 1], negative_transform=True
         ),
         GlobalFunctionalNet(
             channels=[4, 16, 1],
@@ -46,78 +46,47 @@ class TestTrainScf:
         ),
     ]
 
-    systems = []
+    basislist = []
     for i, charge in enumerate(charges):
-        systems.append(
-            System(
-                charges=charge,
-                n_electrons=int(n_electrons[i]),
-                centers=centers[i],
-                grid=grid,
+        basislist.append(
+            GridBasis(
+                System(
+                    charges=charge,
+                    n_electrons=int(n_electrons[i]),
+                    centers=centers[i],
+                    grid=grid,
+                )
             )
         )
 
-    systemds = SystemDataSet(systems, E_truth, D_truth)
-    dataloader = DataLoader(systemds, batch_size=len(systemds), collate_fn=collate_fn)
-
-    def test_train_scf(self):
+    def test_train_scf_linear(self):
 
         for xc_nn in self.models:
-            optimizer = torch.optim.Adam(xc_nn.parameters(), lr=0.01)
-            train_functional(
-                basis_class=GridBasis,
-                functional=xc_nn,
-                optimizer=optimizer,
-                dataloader=self.dataloader,
-                max_epochs=1,
-            )
-
-            train_functional(
-                basis_class=GridBasis,
-                functional=xc_nn,
-                optimizer=optimizer,
-                dataloader=self.dataloader,
-                max_epochs=1,
+            task = TrainingTask(
+                xc_nn,
+                self.basislist,
+                self.n_electrons,
+                SCFData(self.E_truth, self.D_truth),
+                steps=1,
+                mixer="linear",
+                max_iterations=2,
                 enforce_symmetry=True,
             )
+            task.train("run/test", device="cpu")
+        shutil.rmtree("run")
 
-    def test_train_scf_closure(self):
+    def test_train_scf_pulay(self):
 
         for xc_nn in self.models:
-            optimizer = torch.optim.LBFGS(xc_nn.parameters(), lr=1, max_iter=1)
-            train_functional(
-                basis_class=GridBasis,
-                functional=xc_nn,
-                optimizer=optimizer,
-                dataloader=self.dataloader,
-                max_epochs=1,
-                requires_closure=True,
-            )
-
-            train_functional(
-                basis_class=GridBasis,
-                functional=xc_nn,
-                optimizer=optimizer,
-                dataloader=self.dataloader,
-                max_epochs=1,
-                requires_closure=True,
+            task = TrainingTask(
+                xc_nn,
+                self.basislist,
+                self.n_electrons,
+                SCFData(self.E_truth, self.D_truth),
+                steps=1,
+                mixer="pulay",
+                max_iterations=2,
                 enforce_symmetry=True,
             )
-
-    def test_clip_gradients(self):
-        eps = 1e-6
-        xc_nn = self.models[0]
-        optimizer = torch.optim.Adam(xc_nn.parameters(), lr=1e2)
-        train_functional(
-            basis_class=GridBasis,
-            functional=xc_nn,
-            optimizer=optimizer,
-            dataloader=self.dataloader,
-            max_epochs=1,
-            enforce_symmetry=True,
-            max_grad_norm=1e-5,
-        )
-
-        param = xc_nn.parameters()
-        norm = torch.norm(torch.stack([torch.norm(p.grad.detach()) for p in param]))
-        assert norm.item() <= 0.1 + eps
+            task.train("run/test", device="cpu")
+        shutil.rmtree("run")
