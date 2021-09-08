@@ -40,13 +40,15 @@ class SigLayer(nn.Module):
 class GlobalConvolutionalLayer(nn.Module):
     """Global convolutional layer."""
 
+    g: Tensor
+
     def __init__(
         self, channels: int, grid: Tensor, minval: float = 0e0, maxval: float = 1e0
     ):
         super().__init__()
         self.channels = channels
         self.dx = get_dx(grid)
-        self.g = ((grid[:, None] - grid) ** 2).sqrt()
+        self.register_buffer("g", ((grid[:, None] - grid) ** 2).sqrt())
         self.maxval = maxval
         self.minval = minval
         self.xi = nn.Parameter(torch.Tensor(self.channels))
