@@ -11,6 +11,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     List,
     NamedTuple,
     Optional,
@@ -209,7 +210,7 @@ class TrainingTask:
     def __init__(
         self,
         functional: Functional,
-        basis: Basis,
+        basis: Union[Basis, Iterable[Basis]],
         occ: Tensor,
         data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
         steps: int = 200,
@@ -218,11 +219,22 @@ class TrainingTask:
         energy, density = data
         energy = torch.as_tensor(energy)
         self.functional = functional
-        self.basis = basis
         self.occ = occ
-        self.data = SCFData(energy, density)
         self.steps = steps
         self.kwargs = kwargs
+        if isinstance(basis, Basis):
+            self.basislist = [basis]
+            self.occ = self.occ.reshape([1, -1])
+            self.data = SCFData(energy.reshape([1, 1]), density.reshape([1, -1]))
+        else:
+            self.basislist = list(basis)
+            self.data = SCFData(energy, density)
+        assert (
+            len(self.basislist)
+            == self.occ.shape[0]
+            == self.data.energy.shape[0]
+            == self.data.density.shape[0]
+        )
 
     def eval_model(
         self, basis: Basis, occ: Tensor, create_graph: bool = False
@@ -263,7 +275,19 @@ class TrainingTask:
         return metrics
 
     def training_step(self) -> Metrics:
-        metrics = self.metrics_fn(self.basis, self.occ, self.data, create_graph=True)
+        metrics = [
+            self.metrics_fn(basis, occ, SCFData(*data), create_graph=True)
+            for basis, occ, *data in zip(
+                self.basislist, self.occ, self.data.energy, self.data.density
+            )
+        ]
+        metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
+        metrics["loss/energy"] = (metrics["loss/energy"] ** 2).mean()
+        metrics["loss/density"] = (metrics["loss/density"] ** 2).mean()
+        metrics["loss"] = (metrics["loss/energy"] + metrics["loss/density"]).sqrt()
+        metrics["loss/energy"] = metrics["loss/energy"].sqrt()
+        metrics["loss/density"] = metrics["loss/density"].sqrt()
+        metrics["SCF/iter"] = max(metrics["SCF/iter"])
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
             p.grad = p.grad / (2.0 * metrics["loss"])
@@ -278,7 +302,7 @@ class TrainingTask:
         writer = SummaryWriter(log_dir=workdir)
         log.info(f"Moving to device ({device})...")
         self.functional.to(device)
-        self.basis.to(device)
+        self.basislist = [basis.to(device) for basis in self.basislist]
         self.occ = self.occ.to(device)
         self.data = self.data.to(device)
         chkpt = CheckpointStore()
