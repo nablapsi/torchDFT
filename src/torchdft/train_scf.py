@@ -254,17 +254,19 @@ class TrainingTask:
         density_loss_sq = (
             basis.density_mse(data_pred.density[-1] - data.density) / N
         ).mean()
-        loss = (energy_loss_sq + density_loss_sq).sqrt()
-        metrics["loss"] = loss
+        loss = energy_loss_sq + density_loss_sq
+        if create_graph:
+            loss.backward()
+        metrics["loss"] = loss.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/density"] = density_loss_sq.detach().sqrt()
         return metrics
 
     def training_step(self) -> Metrics:
         metrics = self.metrics_fn(self.basis, self.occ, self.data, create_graph=True)
-        loss = metrics["loss"]
-        loss.backward()
-        loss.detach_()
+        # Evaluate (d RMSE / d theta) from (d MSE / d theta)
+        for p in self.functional.parameters():
+            p.grad = p.grad / (2.0 * metrics["loss"])
         assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
