@@ -30,6 +30,8 @@ from .errors import SCFNotConvergedError
 from .functional import Functional
 from .scf import solve_scf
 
+__all__ = ["TrainingTask"]
+
 Metrics = Dict[str, Tensor]
 LossFn = Callable[
     [Basis, Tensor, Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Metrics]
@@ -39,8 +41,6 @@ log = logging.getLogger(__name__)
 
 
 class SCFData(NamedTuple):
-    """Class to hold energy and density points."""
-
     energy: Tensor
     density: Tensor
 
@@ -49,8 +49,6 @@ class SCFData(NamedTuple):
 
 
 class TqdmStream:
-    """Write message to progress bar."""
-
     def write(self, msg: str) -> int:
         try:
             tqdm.write(msg, end="")
@@ -61,8 +59,6 @@ class TqdmStream:
 
 
 class CheckpointStore:
-    """Class to manage model checkpoints."""
-
     def __init__(self) -> None:
         self.chkpts: List[Path] = []
 
