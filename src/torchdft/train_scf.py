@@ -132,7 +132,7 @@ class TrainingTask:
     ) -> Metrics:
         """Evaluate the losses on current model."""
         data_pred, metrics = self.eval_model(basis, occ, create_graph=create_graph)
-        N = self.occ.sum(dim=-1)
+        N = occ.sum(dim=-1)
         energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
         density_loss_sq = (
             basis.density_mse(data_pred.density[-1] - data.density) / N
