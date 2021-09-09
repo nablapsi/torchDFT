@@ -21,7 +21,7 @@ from typing import (
 
 import numpy as np
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
@@ -69,8 +69,8 @@ class CheckpointStore:
             self.chkpts.pop(0).unlink()
 
 
-class TrainingTask:
-    """Class to create a training task."""
+class TrainingTask(nn.Module):
+    """Represents a training task."""
 
     def __init__(
         self,
@@ -81,6 +81,7 @@ class TrainingTask:
         steps: int = 200,
         **kwargs: Any,
     ) -> None:
+        super().__init__()
         energy, density = data
         energy = torch.as_tensor(energy)
         self.functional = functional
@@ -101,9 +102,7 @@ class TrainingTask:
             == self.data.density.shape[0]
         )
 
-    def eval_model(
-        self, basis: Basis, occ: Tensor, create_graph: bool = False
-    ) -> Tuple[SCFData, Metrics]:
+    def eval_model(self, basis: Basis, occ: Tensor) -> Tuple[SCFData, Metrics]:
         """Evaluate model provided a basis and orbital occupation numbers."""
         tape: List[Tuple[Tensor, Tensor]] = []
         try:
@@ -112,7 +111,7 @@ class TrainingTask:
                 occ,
                 self.functional,
                 tape=tape,
-                create_graph=create_graph,
+                create_graph=self.training,
                 **self.kwargs,
             )
         except SCFNotConvergedError:
@@ -123,18 +122,16 @@ class TrainingTask:
         n_pred = basis.density(torch.stack(n_pred))
         return SCFData(E_pred, n_pred), metrics
 
-    def metrics_fn(
-        self, basis: Basis, occ: Tensor, data: SCFData, create_graph: bool = False
-    ) -> Metrics:
+    def metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
         """Evaluate the losses on current model."""
-        data_pred, metrics = self.eval_model(basis, occ, create_graph=create_graph)
+        data_pred, metrics = self.eval_model(basis, occ)
         N = occ.sum(dim=-1)
         energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
         density_loss_sq = (
             basis.density_mse(data_pred.density[-1] - data.density) / N
         ).mean()
         loss = energy_loss_sq + density_loss_sq
-        if create_graph:
+        if self.training:
             loss.backward()
         metrics["loss"] = loss.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
@@ -143,8 +140,9 @@ class TrainingTask:
 
     def training_step(self) -> Metrics:
         """Execute a training step."""
+        assert self.training
         metrics = [
-            self.metrics_fn(basis, occ, SCFData(*data), create_graph=True)
+            self.metrics_fn(basis, occ, SCFData(*data))
             for basis, occ, *data in zip(
                 self.basislist, self.occ, self.data.energy, self.data.density
             )
@@ -162,7 +160,7 @@ class TrainingTask:
         assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
-    def train(self, workdir: str, device: str = "cuda", seed: int = 0) -> None:
+    def fit(self, workdir: str, device: str = "cuda", seed: int = 0) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir)
         if seed is not None:

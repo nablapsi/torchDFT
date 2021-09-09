@@ -72,7 +72,7 @@ class TestTrainScf:
                 max_iterations=2,
                 enforce_symmetry=True,
             )
-            task.train("run/test", device="cpu")
+            task.fit("run/test", device="cpu")
         shutil.rmtree("run")
 
     def test_train_scf_pulay(self):
@@ -88,5 +88,5 @@ class TestTrainScf:
                 max_iterations=2,
                 enforce_symmetry=True,
             )
-            task.train("run/test", device="cpu")
+            task.fit("run/test", device="cpu")
         shutil.rmtree("run")
