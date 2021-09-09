@@ -33,11 +33,10 @@ class ComposedFunctional(Functional):
         self.requires_grad = any(functional.requires_grad for functional in functionals)
 
     def forward(self, density: Density) -> Tensor:
-        epsilon = torch.stack(
+        return torch.stack(
             [
                 factor * functional(density)
-                for (functional, factor) in zip(self.functionals, self.factors)
+                for functional, factor in zip(self.functionals, self.factors)
             ],
             dim=-1,
-        ).sum(-1)
-        return epsilon
+        ).sum(dim=-1)
