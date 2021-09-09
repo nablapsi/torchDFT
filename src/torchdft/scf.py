@@ -15,6 +15,7 @@ from .gridbasis import GridBasis
 from .utils import GeneralizedDiagonalizer
 
 __all__ = ["solve_scf"]
+DEFAULT_MIXER = "linear"
 
 
 def ks_iteration(
@@ -78,10 +79,11 @@ def solve_scf(  # noqa: C901 TODO too complex
     tape: List[Tuple[Tensor, Tensor]] = None,
     create_graph: bool = False,
     use_xitorch: bool = True,
-    mixer: str = "linear",
+    mixer: str = None,
     P_guess: Tensor = None,
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
+    mixer = mixer or DEFAULT_MIXER
     assert mixer in {"linear", "pulay"}
     S, T, V_ext = basis.get_core_integrals()
     if mixer == "pulay":
