@@ -64,6 +64,10 @@ class CheckpointStore:
 class TrainingTask(nn.Module):
     """Represents a training task."""
 
+    basis: Union[Basis, nn.ModuleList]
+    occ: Tensor
+    data: SCFData
+
     def __init__(
         self,
         functional: Functional,
@@ -78,23 +82,31 @@ class TrainingTask(nn.Module):
             energy, density = data
             energy = torch.as_tensor(energy)
             data = SCFData(energy, density)
+        if isinstance(basis, Basis) and not basis.E_nuc.shape:  # single basis
+            assert len(occ.shape) == 1
+            assert len(data.energy.shape) == 0
+            assert len(data.density.shape) == 1
+        else:
+            if isinstance(basis, Basis):  # batched basis
+                assert len(basis.E_nuc.shape) == 1
+                n = basis.E_nuc.shape[0]
+            else:  # iterable of bases
+                basis = nn.ModuleList(list(basis))
+                n = len(basis)
+            assert len(occ.shape) == 2
+            if occ.shape[0] == 1:
+                occ = occ.expand(n, -1)
+            assert len(data.energy.shape) == 1
+            assert len(data.density.shape) == 2
+            assert occ.shape[0] == n
+            assert data.energy.shape[0] == n
+            assert data.density.shape[0] == n
         self.functional = functional
-        self.occ = occ
+        self.basis = basis
+        self.register_buffer("occ", occ)
+        self.data = data
         self.steps = steps
         self.kwargs = kwargs
-        if isinstance(basis, Basis):
-            self.basislist = [basis]
-            self.occ = self.occ.reshape([1, -1])
-            self.data = SCFData(data.energy.reshape([1, 1]), data.density.reshape([1, -1]))
-        else:
-            self.basislist = list(basis)
-            self.data = data
-        assert (
-            len(self.basislist)
-            == self.occ.shape[0]
-            == self.data.energy.shape[0]
-            == self.data.density.shape[0]
-        )
 
     def eval_model(self, basis: Basis, occ: Tensor) -> Tuple[SCFData, Metrics]:
         """Evaluate model provided a basis and orbital occupation numbers."""
@@ -116,38 +128,44 @@ class TrainingTask(nn.Module):
         n_pred = basis.density(torch.stack(n_pred))
         return SCFData(E_pred, n_pred), metrics
 
-    def metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
-        """Evaluate the losses on current model."""
+    def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
         data_pred, metrics = self.eval_model(basis, occ)
         N = occ.sum(dim=-1)
         energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
         density_loss_sq = (
             basis.density_mse(data_pred.density[-1] - data.density) / N
         ).mean()
-        loss = energy_loss_sq + density_loss_sq
+        loss_sq = energy_loss_sq + density_loss_sq
         if self.training:
-            loss.backward()
-        metrics["loss"] = loss.detach().sqrt()
+            loss_sq.backward()
+        metrics["loss"] = loss_sq.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/density"] = density_loss_sq.detach().sqrt()
+        return metrics
+
+    def metrics_fn(self) -> Metrics:
+        """Evaluate the losses on current model."""
+        if isinstance(self.basis, Basis):
+            return self._metrics_fn(self.basis, self.occ, self.data)
+        metrics = [
+            self._metrics_fn(basis, occ, SCFData(*data))
+            for basis, occ, *data in zip(
+                self.basis, self.occ, self.data.energy, self.data.density
+            )
+        ]
+        metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
+        metrics["loss/energy"] = (metrics["loss/energy"] ** 2).mean().sqrt()
+        metrics["loss/density"] = (metrics["loss/density"] ** 2).mean().sqrt()
+        metrics["loss"] = (
+            metrics["loss/energy"] ** 2 + metrics["loss/density"] ** 2
+        ).sqrt()
+        metrics["SCF/iter"] = max(metrics["SCF/iter"])
         return metrics
 
     def training_step(self) -> Metrics:
         """Execute a training step."""
         assert self.training
-        metrics = [
-            self.metrics_fn(basis, occ, SCFData(*data))
-            for basis, occ, *data in zip(
-                self.basislist, self.occ, self.data.energy, self.data.density
-            )
-        ]
-        metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
-        metrics["loss/energy"] = (metrics["loss/energy"] ** 2).mean()
-        metrics["loss/density"] = (metrics["loss/density"] ** 2).mean()
-        metrics["loss"] = (metrics["loss/energy"] + metrics["loss/density"]).sqrt()
-        metrics["loss/energy"] = metrics["loss/energy"].sqrt()
-        metrics["loss/density"] = metrics["loss/density"].sqrt()
-        metrics["SCF/iter"] = max(metrics["SCF/iter"])
+        metrics = self.metrics_fn()
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
             p.grad = p.grad / (2.0 * metrics["loss"])
@@ -162,10 +180,7 @@ class TrainingTask(nn.Module):
             torch.manual_seed(seed)
         writer = SummaryWriter(log_dir=workdir)
         log.info(f"Moving to device ({device})...")
-        self.functional.to(device)
-        self.basislist = [basis.to(device) for basis in self.basislist]
-        self.occ = self.occ.to(device)
-        self.data.to(device)
+        self.to(device)
         chkpt = CheckpointStore()
         opt = torch.optim.LBFGS(
             self.functional.parameters(),
