@@ -7,17 +7,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    NamedTuple,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, Callable, Dict, Iterable, List, Tuple, Union
 
 import numpy as np
 import torch
@@ -40,12 +30,14 @@ LossFn = Callable[
 log = logging.getLogger(__name__)
 
 
-class SCFData(NamedTuple):
+class SCFData(nn.Module):
     energy: Tensor
     density: Tensor
 
-    def to(self, device: Optional[str]) -> SCFData:
-        return SCFData(self.energy.to(device), self.density.to(device))
+    def __init__(self, energy: Tensor, density: Tensor):
+        super().__init__()
+        self.register_buffer("energy", energy)
+        self.register_buffer("density", density)
 
 
 class TqdmStream:
@@ -82,8 +74,10 @@ class TrainingTask(nn.Module):
         **kwargs: Any,
     ) -> None:
         super().__init__()
-        energy, density = data
-        energy = torch.as_tensor(energy)
+        if not isinstance(data, SCFData):
+            energy, density = data
+            energy = torch.as_tensor(energy)
+            data = SCFData(energy, density)
         self.functional = functional
         self.occ = occ
         self.steps = steps
@@ -91,10 +85,10 @@ class TrainingTask(nn.Module):
         if isinstance(basis, Basis):
             self.basislist = [basis]
             self.occ = self.occ.reshape([1, -1])
-            self.data = SCFData(energy.reshape([1, 1]), density.reshape([1, -1]))
+            self.data = SCFData(data.energy.reshape([1, 1]), data.density.reshape([1, -1]))
         else:
             self.basislist = list(basis)
-            self.data = SCFData(energy, density)
+            self.data = data
         assert (
             len(self.basislist)
             == self.occ.shape[0]
@@ -171,7 +165,7 @@ class TrainingTask(nn.Module):
         self.functional.to(device)
         self.basislist = [basis.to(device) for basis in self.basislist]
         self.occ = self.occ.to(device)
-        self.data = self.data.to(device)
+        self.data.to(device)
         chkpt = CheckpointStore()
         opt = torch.optim.LBFGS(
             self.functional.parameters(),
