@@ -22,6 +22,8 @@ class GridBasis(Basis):
     dx: Tensor
     grid: Tensor
     E_nuc: Tensor
+    centers: Tensor
+    charges: Tensor
 
     def __init__(
         self,
@@ -33,6 +35,8 @@ class GridBasis(Basis):
         self.interaction_fn = interaction_fn
         self.register_buffer("grid", self.system.grid)
         self.register_buffer("dx", get_dx(self.grid))
+        self.register_buffer("centers", self.system.centers)
+        self.register_buffer("charges", self.system.charges)
         self.register_buffer(
             "E_nuc",
             (
@@ -100,6 +104,11 @@ class GridBasis(Basis):
 
     def symmetrize_P(self, P: Tensor) -> Tensor:
         return (P + P.flip(-1, -2)) / 2
+
+    def quadrupole(self, density: Tensor) -> Tensor:
+        Q_el = -(self.grid ** 2 * density).sum(-1) * self.dx
+        Q_nuc = (self.centers ** 2 * self.charges).sum(-1)
+        return Q_el + Q_nuc
 
 
 def get_gradient(grid: Tensor) -> Tensor:
