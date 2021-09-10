@@ -48,7 +48,7 @@ class GlobalConvolutionalLayer(nn.Module):
         super().__init__()
         self.channels = channels
         self.dx = get_dx(grid)
-        self.register_buffer("g", ((grid[:, None] - grid) ** 2).sqrt())
+        self.register_buffer("g", (grid[:, None] - grid).abs())
         self.maxval = maxval
         self.minval = minval
         self.xi = nn.Parameter(torch.Tensor(self.channels))
