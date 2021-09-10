@@ -141,6 +141,7 @@ class TrainingTask(nn.Module):
         metrics["loss"] = loss_sq.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/density"] = density_loss_sq.detach().sqrt()
+        metrics.update(basis.density_metrics_fn(data_pred.density[-1], data.density))
         return metrics
 
     def metrics_fn(self) -> Metrics:

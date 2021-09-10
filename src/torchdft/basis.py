@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Dict, Tuple
 
 from torch import Tensor, nn
 
@@ -31,3 +31,8 @@ class Basis(nn.Module, ABC):
     @abstractmethod
     def density(self, P: Tensor) -> Tensor:
         pass
+
+    def density_metrics_fn(
+        self, density: Tensor, density_ref: Tensor
+    ) -> Dict[str, Tensor]:
+        return {}
