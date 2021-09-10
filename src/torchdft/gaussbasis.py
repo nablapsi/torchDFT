@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Iterable, Tuple, Union
+from typing import Dict, Iterable, Tuple, Union
 
 import torch
 from pyscf import dft
@@ -23,6 +23,12 @@ def _bapply(func, *xs):  # type: ignore
         return func(*xs)
 
 
+def _quadrupole(r: Tensor) -> Tensor:
+    Q1 = 3 * r[..., None, :] * r[..., :, None]
+    Q2 = -r.norm(dim=-1).pow(2)[..., None, None] * torch.eye(3, device=r.device)
+    return (Q1 + Q2) / 2
+
+
 class GaussianBasis(Basis):
     """Gaussian basis with radial grids from PySCF."""
 
@@ -30,6 +36,9 @@ class GaussianBasis(Basis):
     T: Tensor
     V_ext: Tensor
     phi: Tensor
+    grid_coords: Tensor
+    atom_coords: Tensor
+    atom_charges: Tensor
 
     def _intor(self, key: str) -> Tensor:
         return _bapply(lambda m: fnp(m.intor(key)), self.mol)
@@ -53,6 +62,7 @@ class GaussianBasis(Basis):
         self.register_buffer(
             "grid_weights", _bapply(lambda g: fnp(g.weights), self.grid)
         )
+        self.register_buffer("grid_coords", _bapply(lambda g: fnp(g.coords), self.grid))
         phi = _bapply(
             lambda m, g: fnp(dft.numint.eval_ao(m, g.coords, deriv=1)),
             self.mol,
@@ -63,12 +73,37 @@ class GaussianBasis(Basis):
         self.register_buffer(
             "E_nuc", _bapply(lambda m: torch.tensor(m.energy_nuc()), self.mol)
         )
+        self.register_buffer(
+            "atom_coords", _bapply(lambda m: fnp(m.atom_coords()), self.mol)
+        )
+        self.register_buffer(
+            "atom_charges", _bapply(lambda m: fnp(m.atom_charges()), self.mol)
+        )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
         return self.S, self.T, self.V_ext
 
     def density(self, P: Tensor) -> Tensor:
         return ((self.phi @ P) * self.phi).sum(dim=-1)
+
+    def quadrupole(self, density: Tensor) -> Tensor:
+        Q_el = (
+            (-density * self.grid_weights)[..., None, None]
+            * _quadrupole(self.grid_coords)
+        ).sum(dim=-3)
+        Q_nuc = (
+            self.atom_charges[..., None, None] * _quadrupole(self.atom_coords)
+        ).sum(dim=-3)
+        return Q_el + Q_nuc
+
+    def density_metrics_fn(
+        self, density: Tensor, density_ref: Tensor
+    ) -> Dict[str, Tensor]:
+        Q, Q_ref = (
+            torch.linalg.eigvalsh(self.quadrupole(x).detach())
+            for x in [density, density_ref]
+        )
+        return {"loss/quadrupole": ((Q - Q_ref) ** 2).mean().sqrt()}
 
     def get_int_integrals(
         self,
