@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Callable, Tuple, Union
+from typing import Callable, Dict, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -109,6 +109,12 @@ class GridBasis(Basis):
         Q_el = -(self.grid ** 2 * density).sum(-1) * self.dx
         Q_nuc = (self.centers ** 2 * self.charges).sum(-1)
         return Q_el + Q_nuc
+
+    def density_metrics_fn(
+        self, density: Tensor, density_ref: Tensor
+    ) -> Dict[str, Tensor]:
+        Q, Q_ref = (self.quadrupole(x).detach() for x in [density, density_ref])
+        return {"loss/quadrupole": ((Q - Q_ref) ** 2).mean().sqrt()}
 
 
 def get_gradient(grid: Tensor) -> Tensor:
