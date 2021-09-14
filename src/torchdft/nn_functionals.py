@@ -53,7 +53,7 @@ class GlobalConvolutionalLayer(nn.Module):
         self.minval = minval
         self.xi = nn.Parameter(torch.Tensor(self.channels))
 
-        nn.init.uniform_(self.xi)
+        nn.init.uniform_(self.xi, a=-1.0, b=1.0)
 
     def forward(self, density: Tensor) -> Tensor:
         """Forward pass of global convolutional layer.
