@@ -274,7 +274,7 @@ def get_functional_energy_potential(
     dx = get_dx(grid)
     E_func = get_functional_energy(density, grid, functional)
     (v_func,) = torch.autograd.grad(
-        E_func.sum() / dx, density.value, retain_graph=True, create_graph=create_graph
+        E_func.sum() / dx, density.value, create_graph=create_graph
     )
     if not create_graph:
         E_func = E_func.detach()
