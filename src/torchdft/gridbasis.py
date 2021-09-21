@@ -271,6 +271,9 @@ def get_functional_energy_potential(
     create_graph: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Evaluate functional potential."""
+    density.value = torch.where(
+        density.value == 0.0, density.value + 1e-100, density.value
+    )
     dx = get_dx(grid)
     E_func = get_functional_energy(density, grid, functional)
     (v_func,) = torch.autograd.grad(
