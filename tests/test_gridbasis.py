@@ -131,6 +131,7 @@ class TestFunctionals:
 
         _, pot = get_functional_energy_potential(density, grid, LDA)
 
+        density.value = density.value.detach().requires_grad_()
         ener = get_functional_energy(density, grid, LDA)
         ener.backward()
         assert_allclose(pot, density.value.grad / dx)
