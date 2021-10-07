@@ -184,13 +184,15 @@ class TrainingTask(nn.Module):
         log.info(f"Moving to device ({device})...")
         self.to(device)
         chkpt = CheckpointStore()
-        opt = torch.optim.LBFGS(
-            self.functional.parameters(),
-            line_search_fn="strong_wolfe",
-            max_eval=self.steps,
-            max_iter=self.steps,
-            tolerance_change=np.nan,
-        )
+        # opt = torch.optim.LBFGS(
+        #     self.functional.parameters(),
+        #     line_search_fn="strong_wolfe",
+        #     max_eval=self.steps,
+        #     max_iter=self.steps,
+        #     tolerance_change=np.nan,
+        # )
+        opt = torch.optim.AdamW(self.functional.parameters(), lr=1e-2)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, patience=100)
         log.info("Initialized training")
         step = 0
         last_log = 0.0
@@ -220,7 +222,13 @@ class TrainingTask(nn.Module):
                 step += 1
                 return metrics["loss"].item()
 
-            opt.step(closure)
+            # opt.step(closure)
+            for _ in range(self.steps):
+                loss = closure()
+                lr = opt.state_dict()["param_groups"][0]["lr"]
+                writer.add_scalar("learning_rate", lr, step)
+                opt.step()
+                scheduler.step(loss)
 
         torch.save(metrics, workdir / "metrics.pt")
         chkpt.replace(self.functional.state_dict(), workdir / "model.pt")
