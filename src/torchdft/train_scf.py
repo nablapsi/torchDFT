@@ -18,6 +18,7 @@ from tqdm.auto import tqdm
 from .basis import Basis
 from .errors import SCFNotConvergedError
 from .functional import Functional
+from .gaussbasis import GaussianBasis
 from .scf import solve_scf
 
 __all__ = ["TrainingTask"]
@@ -224,6 +225,8 @@ class TrainingTask(nn.Module):
 
             # opt.step(closure)
             for _ in range(self.steps):
+                if isinstance(self.basis, GaussianBasis):
+                    self.basis.mask = torch.rand_like(self.basis.grid_weights) <= 0.0025
                 loss = closure()
                 lr = opt.state_dict()["param_groups"][0]["lr"]
                 writer.add_scalar("learning_rate", lr, step)

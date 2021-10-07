@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Dict, Iterable, Tuple, Union
+from typing import Dict, Iterable, Optional, Tuple, Union
 
 import torch
 from pyscf import dft
@@ -37,8 +37,10 @@ class GaussianBasis(Basis):
     V_ext: Tensor
     phi: Tensor
     grid_coords: Tensor
+    grid_weights: Tensor
     atom_coords: Tensor
     atom_charges: Tensor
+    mask: Optional[Tensor]
 
     def _intor(self, key: str) -> Tensor:
         return _bapply(lambda m: fnp(m.intor(key)), self.mol)
@@ -52,6 +54,7 @@ class GaussianBasis(Basis):
         self.register_buffer("V_ext", self._intor("int1e_nuc"))
         self.register_buffer("eri", self._intor("int2e"))
         self.grid = _bapply(dft.gen_grid.Grids, self.mol)
+        self.mask = None
 
         def build_grid(grid):  # type: ignore
             for k, v in kwargs.items():
@@ -125,7 +128,24 @@ class GaussianBasis(Basis):
                 .sum(dim=-1)
                 .norm(dim=-2)
             )
-        E_func = functional(density)
+        if self.mask is not None:
+            E_func = torch.empty_like(density.value)
+            density_tmp = Density(
+                density.value[self.mask],
+                density.grad[self.mask] if density.grad is not None else None,
+            )
+            E_func[self.mask] = functional(density_tmp)
+            for p in functional.parameters():
+                p.detach_()
+            density_tmp = Density(
+                density.value[~self.mask],
+                density.grad[~self.mask] if density.grad is not None else None,
+            )
+            E_func[~self.mask] = functional(density_tmp)
+            for p in functional.parameters():
+                p.requires_grad_()
+        else:
+            E_func = functional(density)
         if functional.per_electron:
             E_func = density.value * E_func
         E_func = (E_func * self.grid_weights).sum(dim=-1)
