@@ -1,7 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Iterable, List, Tuple, Union
+from typing import Any, Dict, Iterable, List, Tuple, Union
 
 import torch
 import xitorch
@@ -34,11 +34,20 @@ def ks_iteration(
 
 
 class DIIS:
-    def __init__(self, S: Tensor, max_history: int = 10) -> None:
+    def __init__(
+        self,
+        S: Tensor,
+        max_history: int = 10,
+        precondition: bool = True,
+        regularization: float = 1e-4,
+    ) -> None:
+        assert not (regularization and not precondition)
         self.S = S
         S, U = torch.linalg.eigh(S)
         self.X = U @ (1 / S.sqrt()).diag_embed()
         self.max_history = max_history
+        self.precondition = precondition
+        self.regularization = regularization
         self.history: List[Tuple[Tensor, Tensor]] = []
 
     def _get_coeffs(self, P: Tensor, F: Tensor) -> Tensor:
@@ -48,15 +57,22 @@ class DIIS:
         err = torch.stack([e for _, e in self.history], dim=-3)
         B = torch.einsum("...imn,...jmn->...ij", err, err)
         *nb, N = B.shape[:-1]
+        if self.precondition:
+            pre = 1 / B.detach().diagonal(dim1=-1, dim2=-2).sqrt()
+        else:
+            pre = B.new_ones((*nb, N))
+        B = pre[..., None] * pre[..., None, :] * B
+        B = B + self.regularization * torch.eye(B.shape[-1], device=B.device)
         B = torch.cat(
             [
-                torch.cat([B, -B.new_ones((*nb, N, 1))], dim=-1),
-                torch.cat([-B.new_ones((*nb, 1, N)), B.new_zeros((*nb, 1, 1))], dim=-1),
+                torch.cat([B, -pre[..., None]], dim=-1),
+                torch.cat([-pre[..., None, :], B.new_zeros((*nb, 1, 1))], dim=-1),
             ],
             dim=-2,
         )
         y = torch.cat([B.new_zeros((*nb, N)), -B.new_ones((*nb, 1))], dim=-1)
-        return torch.linalg.solve(B, y)[..., :-1]
+        c = pre * torch.linalg.solve(B, y)[..., :-1]
+        return c
 
     def step(self, P: Tensor, F: Tensor) -> Tensor:
         c = self._get_coeffs(P, F)
@@ -81,13 +97,14 @@ def solve_scf(  # noqa: C901 TODO too complex
     use_xitorch: bool = True,
     mixer: str = None,
     P_guess: Tensor = None,
+    mixer_kwargs: Dict[str, Any] = None,
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
     mixer = mixer or DEFAULT_MIXER
     assert mixer in {"linear", "pulay"}
     S, T, V_ext = basis.get_core_integrals()
     if mixer == "pulay":
-        diis = DIIS(S)
+        diis = DIIS(S, **(mixer_kwargs or {}))
     if not use_xitorch:
         S = GeneralizedDiagonalizer(S).X
     F = T + V_ext
