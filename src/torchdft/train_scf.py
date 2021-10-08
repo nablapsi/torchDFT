@@ -84,24 +84,25 @@ class TrainingTask(nn.Module):
             energy = torch.as_tensor(energy)
             data = SCFData(energy, density)
         if isinstance(basis, Basis) and not basis.E_nuc.shape:  # single basis
+            self.train_samples = 1
             assert len(occ.shape) == 1
             assert len(data.energy.shape) == 0
             assert len(data.density.shape) == 1
         else:
             if isinstance(basis, Basis):  # batched basis
                 assert len(basis.E_nuc.shape) == 1
-                n = basis.E_nuc.shape[0]
+                self.train_samples = basis.E_nuc.shape[0]
             else:  # iterable of bases
                 basis = nn.ModuleList(list(basis))
-                n = len(basis)
+                self.train_samples = len(basis)
             assert len(occ.shape) == 2
             if occ.shape[0] == 1:
-                occ = occ.expand(n, -1)
+                occ = occ.expand(self.train_samples, -1)
             assert len(data.energy.shape) == 1
             assert len(data.density.shape) == 2
-            assert occ.shape[0] == n
-            assert data.energy.shape[0] == n
-            assert data.density.shape[0] == n
+            assert occ.shape[0] == self.train_samples
+            assert data.energy.shape[0] == self.train_samples
+            assert data.density.shape[0] == self.train_samples
         self.functional = functional
         self.basis = basis
         self.register_buffer("occ", occ)
@@ -171,7 +172,7 @@ class TrainingTask(nn.Module):
         metrics = self.metrics_fn()
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
-            p.grad = p.grad / (2.0 * metrics["loss"])
+            p.grad = p.grad / (2.0 * self.train_samples * metrics["loss"])
         assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
