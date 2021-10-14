@@ -176,7 +176,9 @@ class TrainingTask(nn.Module):
         assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
-    def fit(self, workdir: str, device: str = "cuda", seed: int = 0) -> None:
+    def fit(
+        self, workdir: str, device: str = "cuda", seed: int = 0, with_lbfgs: bool = True
+    ) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir)
         if seed is not None:
@@ -186,15 +188,17 @@ class TrainingTask(nn.Module):
         log.info(f"Moving to device ({device})...")
         self.to(device)
         chkpt = CheckpointStore()
-        # opt = torch.optim.LBFGS(
-        #     self.functional.parameters(),
-        #     line_search_fn="strong_wolfe",
-        #     max_eval=self.steps,
-        #     max_iter=self.steps,
-        #     tolerance_change=np.nan,
-        # )
-        opt = torch.optim.AdamW(self.functional.parameters(), lr=1e-2)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, patience=100)
+        if with_lbfgs:
+            opt: torch.optim.Optimizer = torch.optim.LBFGS(
+                self.functional.parameters(),
+                line_search_fn="strong_wolfe",
+                max_eval=self.steps,
+                max_iter=self.steps,
+                tolerance_change=np.nan,
+            )
+        else:
+            opt = torch.optim.AdamW(self.functional.parameters(), lr=1e-2)
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, patience=100)
         log.info("Initialized training")
         step = 0
         last_log = 0.0
@@ -224,15 +228,19 @@ class TrainingTask(nn.Module):
                 step += 1
                 return metrics["loss"].item()
 
-            # opt.step(closure)
-            for _ in range(self.steps):
-                if isinstance(self.basis, GaussianBasis):
-                    self.basis.mask = torch.rand_like(self.basis.grid_weights) <= 0.0025
-                loss = closure()
-                lr = opt.state_dict()["param_groups"][0]["lr"]
-                writer.add_scalar("learning_rate", lr, step)
-                opt.step()
-                scheduler.step(loss)
+            if with_lbfgs:
+                opt.step(closure)
+            else:
+                for _ in range(self.steps):
+                    if isinstance(self.basis, GaussianBasis):
+                        self.basis.mask = (
+                            torch.rand_like(self.basis.grid_weights) <= 0.0025
+                        )
+                    loss = closure()
+                    lr = opt.state_dict()["param_groups"][0]["lr"]
+                    writer.add_scalar("learning_rate", lr, step)
+                    opt.step()
+                    scheduler.step(loss)
 
         torch.save(metrics, workdir / "metrics.pt")
         chkpt.replace(self.functional.state_dict(), workdir / "model.pt")
