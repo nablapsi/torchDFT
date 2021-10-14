@@ -12,7 +12,7 @@ from .basis import Basis
 from .errors import SCFNotConvergedError
 from .functional import Functional
 from .gridbasis import GridBasis
-from .utils import GeneralizedDiagonalizer
+from .utils import GeneralizedDiagonalizer, orthogonalizer
 
 __all__ = ["solve_scf"]
 DEFAULT_MIXER = "linear"
@@ -36,49 +36,44 @@ def ks_iteration(
 class DIIS:
     def __init__(
         self,
-        S: Tensor,
         max_history: int = 10,
         precondition: bool = True,
         regularization: float = 1e-4,
     ) -> None:
         assert not (regularization and not precondition)
-        self.S = S
-        S, U = torch.linalg.eigh(S)
-        self.X = U @ (1 / S.sqrt()).diag_embed()
         self.max_history = max_history
         self.precondition = precondition
         self.regularization = regularization
         self.history: List[Tuple[Tensor, Tensor]] = []
 
-    def _get_coeffs(self, P: Tensor, F: Tensor) -> Tensor:
-        err = self.X.transpose(-1, -2) @ (F @ P @ self.S - self.S @ P @ F) @ self.X
-        self.history.append((F, err))
+    def _get_coeffs(self, X: Tensor, err: Tensor) -> Tensor:
+        self.history.append((X, err))
         self.history = self.history[-self.max_history :]
         err = torch.stack([e for _, e in self.history], dim=-3)
-        B = torch.einsum("...imn,...jmn->...ij", err, err)
+        derr = err.diff(dim=-3)
+        B = torch.einsum("...imn,...jmn->...ij", derr, derr)
+        y = -torch.einsum("...imn,...mn->...i", derr, err[..., -1, :, :])
         *nb, N = B.shape[:-1]
+        if N == 0:
+            return B.new_ones(*nb, 1)
         if self.precondition:
             pre = 1 / B.detach().diagonal(dim1=-1, dim2=-2).sqrt()
         else:
             pre = B.new_ones((*nb, N))
         B = pre[..., None] * pre[..., None, :] * B
         B = B + self.regularization * torch.eye(B.shape[-1], device=B.device)
-        B = torch.cat(
-            [
-                torch.cat([B, -pre[..., None]], dim=-1),
-                torch.cat([-pre[..., None, :], B.new_zeros((*nb, 1, 1))], dim=-1),
-            ],
-            dim=-2,
-        )
-        y = torch.cat([B.new_zeros((*nb, N)), -B.new_ones((*nb, 1))], dim=-1)
-        c = pre * torch.linalg.solve(B, y)[..., :-1]
+        c = pre * torch.linalg.solve(B, pre * y)
+        c = torch.cat([-c[..., :1], -c.diff(dim=-1), 1 + c[..., -1:]], dim=-1)
         return c
 
-    def step(self, P: Tensor, F: Tensor) -> Tensor:
-        c = self._get_coeffs(P, F)
-        F = torch.stack([F for F, _ in self.history], dim=-1)
-        F = (c[..., None, None, :] * F).sum(dim=-1)
-        return F
+    def step(self, X: Tensor, err: Tensor, alpha: float = None) -> Tensor:
+        c = self._get_coeffs(X, err)
+        X = torch.stack([X for X, _ in self.history], dim=-1)
+        err = torch.stack([e for _, e in self.history], dim=-1)
+        if alpha is not None:
+            X = X + alpha * err
+        X = (c[..., None, None, :] * X).sum(dim=-1)
+        return X
 
 
 def solve_scf(  # noqa: C901 TODO too complex
@@ -101,15 +96,16 @@ def solve_scf(  # noqa: C901 TODO too complex
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
     mixer = mixer or DEFAULT_MIXER
-    assert mixer in {"linear", "pulay"}
+    assert mixer in {"linear", "pulay", "pulaydensity"}
     S, T, V_ext = basis.get_core_integrals()
-    if mixer == "pulay":
-        diis = DIIS(S, **(mixer_kwargs or {}))
-    if not use_xitorch:
-        S = GeneralizedDiagonalizer(S).X
+    if mixer in {"pulay", "pulaydensity"}:
+        diis = DIIS(**(mixer_kwargs or {}))
+        if mixer == "pulay":
+            X = orthogonalizer(S)
+    S_or_X = S if use_xitorch else GeneralizedDiagonalizer(S).X
     F = T + V_ext
     if P_guess is None:
-        P_in, energy_orb = ks_iteration(F, S, occ, use_xitorch=use_xitorch)
+        P_in, energy_orb = ks_iteration(F, S_or_X, occ, use_xitorch=use_xitorch)
         energy_prev = energy_orb + basis.E_nuc
     else:
         P_in, energy_prev = P_guess, torch.tensor([0e0])
@@ -124,8 +120,9 @@ def solve_scf(  # noqa: C901 TODO too complex
         )
         F = T + V_ext + V_H + V_func
         if mixer == "pulay":
-            F = diis.step(P_in, F)
-        P_out, energy_orb = ks_iteration(F, S, occ, use_xitorch=use_xitorch)
+            err = X.transpose(-1, -2) @ (F @ P_in @ S - S @ P_in @ F) @ X
+            F = diis.step(F, err)
+        P_out, energy_orb = ks_iteration(F, S_or_X, occ, use_xitorch=use_xitorch)
         # TODO duplicate, should be made part of ks_iteration()
         if enforce_symmetry and isinstance(basis, GridBasis):
             P_out = basis.symmetrize_P(P_out)
@@ -147,6 +144,8 @@ def solve_scf(  # noqa: C901 TODO too complex
             break
         if mixer == "pulay":
             P_in = P_out
+        elif mixer == "pulaydensity":
+            P_in = diis.step(P_in, P_out - P_in, alpha)
         elif mixer == "linear":
             alpha_masked = torch.where(converged, 0.0, alpha)[..., None, None]
             P_in = P_in + alpha_masked * (P_out - P_in)

@@ -114,12 +114,17 @@ def exp_coulomb(r: Tensor) -> Tensor:
     return constants.A * torch.exp(-constants.kappa * torch.abs(r))
 
 
+def orthogonalizer(B: Tensor) -> Tensor:
+    """Calculate orthogonalization matrix."""
+    B, U = torch.linalg.eigh(B)
+    return U @ (1 / B.sqrt()).diag_embed()
+
+
 class GeneralizedDiagonalizer:
     """Solves the generalized eigenvalue problem A x = a B x."""
 
     def __init__(self, B: Tensor):
-        B, U = torch.linalg.eigh(B)
-        self.X = U @ (1 / B.sqrt()).diag_embed()
+        self.X = orthogonalizer(B)
 
     @staticmethod
     def eigh(A: Tensor, X: Tensor) -> Tuple[Tensor, Tensor]:
