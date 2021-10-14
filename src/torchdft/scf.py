@@ -49,19 +49,19 @@ class DIIS:
     def _get_coeffs(self, X: Tensor, err: Tensor) -> Tensor:
         self.history.append((X, err))
         self.history = self.history[-self.max_history :]
+        nb, N = X.shape[:-2], len(self.history)
+        if N == 1:
+            return X.new_ones((*nb, 1))
         err = torch.stack([e for _, e in self.history], dim=-3)
         derr = err.diff(dim=-3)
         B = torch.einsum("...imn,...jmn->...ij", derr, derr)
         y = -torch.einsum("...imn,...mn->...i", derr, err[..., -1, :, :])
-        *nb, N = B.shape[:-1]
-        if N == 0:
-            return B.new_ones(*nb, 1)
         if self.precondition:
             pre = 1 / B.detach().diagonal(dim1=-1, dim2=-2).sqrt()
         else:
-            pre = B.new_ones((*nb, N))
+            pre = B.new_ones((*nb, N - 1))
         B = pre[..., None] * pre[..., None, :] * B
-        B = B + self.regularization * torch.eye(B.shape[-1], device=B.device)
+        B = B + self.regularization * torch.eye(N - 1, device=B.device)
         c = pre * torch.linalg.solve(B, pre * y)
         c = torch.cat([-c[..., :1], -c.diff(dim=-1), 1 + c[..., -1:]], dim=-1)
         return c
