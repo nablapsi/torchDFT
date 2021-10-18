@@ -79,36 +79,45 @@ class TrainingTask(nn.Module):
         **kwargs: Any,
     ) -> None:
         super().__init__()
-        if not isinstance(data, SCFData):
-            energy, density = data
-            energy = torch.as_tensor(energy)
-            data = SCFData(energy, density)
-        if isinstance(basis, Basis) and not basis.E_nuc.shape:  # single basis
-            self.train_samples = 1
-            assert len(occ.shape) == 1
-            assert len(data.energy.shape) == 0
-            assert len(data.density.shape) == 1
-        else:
-            if isinstance(basis, Basis):  # batched basis
-                assert len(basis.E_nuc.shape) == 1
-                self.train_samples = basis.E_nuc.shape[0]
-            else:  # iterable of bases
-                basis = nn.ModuleList(list(basis))
-                self.train_samples = len(basis)
-            assert len(occ.shape) == 2
-            if occ.shape[0] == 1:
-                occ = occ.expand(self.train_samples, -1)
-            assert len(data.energy.shape) == 1
-            assert len(data.density.shape) == 2
-            assert occ.shape[0] == self.train_samples
-            assert data.energy.shape[0] == self.train_samples
-            assert data.density.shape[0] == self.train_samples
+        basis, occ, data, self.train_samples = self.prepare_data(basis, occ, data)
         self.functional = functional
         self.basis = basis
         self.register_buffer("occ", occ)
         self.data = data
         self.steps = steps
         self.kwargs = kwargs
+
+    def prepare_data(
+        self,
+        basis: Union[Basis, Iterable[Basis]],
+        occ: Tensor,
+        data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
+    ) -> Tuple[Union[Basis, nn.ModuleList], Tensor, SCFData, int]:
+        if not isinstance(data, SCFData):
+            energy, density = data
+            energy = torch.as_tensor(energy)
+            data = SCFData(energy, density)
+        if isinstance(basis, Basis) and not basis.E_nuc.shape:  # single basis
+            samples = 1
+            assert len(occ.shape) == 1
+            assert len(data.energy.shape) == 0
+            assert len(data.density.shape) == 1
+        else:
+            if isinstance(basis, Basis):  # batched basis
+                assert len(basis.E_nuc.shape) == 1
+                samples = basis.E_nuc.shape[0]
+            else:  # iterable of bases
+                basis = nn.ModuleList(list(basis))
+                samples = len(basis)
+            assert len(occ.shape) == 2
+            if occ.shape[0] == 1:
+                occ = occ.expand(samples, -1)
+            assert len(data.energy.shape) == 1
+            assert len(data.density.shape) == 2
+            assert occ.shape[0] == samples
+            assert data.energy.shape[0] == samples
+            assert data.density.shape[0] == samples
+        return basis, occ, data, samples
 
     def eval_model(self, basis: Basis, occ: Tensor) -> Tuple[SCFData, Metrics]:
         """Evaluate model provided a basis and orbital occupation numbers."""
