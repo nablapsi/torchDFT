@@ -189,7 +189,17 @@ class TrainingTask(nn.Module):
         return metrics
 
     def fit(
-        self, workdir: str, device: str = "cuda", seed: int = 0, with_lbfgs: bool = True
+        self,
+        workdir: str,
+        device: str = "cuda",
+        seed: int = 0,
+        with_lbfgs: bool = True,
+        validation_set: Tuple[
+            Union[Basis, Iterable[Basis]],
+            Tensor,
+            Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
+        ] = None,
+        validation_step: int = 0,
     ) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir)
@@ -211,6 +221,14 @@ class TrainingTask(nn.Module):
         else:
             opt = torch.optim.AdamW(self.functional.parameters(), lr=1e-2)
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, patience=100)
+        if validation_set is not None:
+            assert validation_step
+            v_basis, v_occ, v_data, v_samples = self.prepare_data(
+                validation_set[0], validation_set[1], validation_set[2]
+            )
+            v_basis.to(device)
+            v_occ = v_occ.to(device)
+            v_data.to(device)
         log.info("Initialized training")
         step = 0
         last_log = 0.0
@@ -235,6 +253,13 @@ class TrainingTask(nn.Module):
                         self.functional.state_dict(),
                         workdir / f"chkpt-{step}.pt",  # type: ignore
                     )
+                if validation_step != 0 and step % validation_step == 0:
+                    self.eval()
+                    v_metrics: Metrics = self.metrics_fn(v_basis, v_occ, v_data)
+                    v_metrics["loss/loss"] = v_metrics.pop("loss")
+                    for key in v_metrics.keys():
+                        metrics[key + "_validation"] = v_metrics[key]
+                    self.train()
                 with torch.no_grad():
                     self.after_step(step, metrics, writer)
                 step += 1
