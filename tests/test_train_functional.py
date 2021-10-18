@@ -90,3 +90,72 @@ class TestTrainScf:
             )
             task.fit("run/test", device="cpu")
         shutil.rmtree("run")
+
+    def test_train_scf_pulay_adam(self):
+
+        for xc_nn in self.models:
+            task = TrainingTask(
+                xc_nn,
+                self.basislist,
+                self.n_electrons,
+                SCFData(self.E_truth, self.D_truth),
+                steps=1,
+                mixer="pulay",
+                max_iterations=2,
+                enforce_symmetry=True,
+            )
+            task.fit("run/test", device="cpu", with_lbfgs=False)
+        shutil.rmtree("run")
+
+    def test_train_scf_pulay_single_basis(self):
+        system = System(
+            charges=self.charges[0],
+            n_electrons=int(self.n_electrons[0]),
+            centers=self.centers[0],
+            grid=self.grid,
+        )
+        basis = GridBasis(system)
+        for xc_nn in self.models:
+            task = TrainingTask(
+                xc_nn,
+                basis,
+                system.occ("KS"),
+                SCFData(self.E_truth[0], self.D_truth[0]),
+                steps=1,
+                mixer="pulay",
+                max_iterations=2,
+                enforce_symmetry=True,
+            )
+            task.fit("run/test", device="cpu")
+        shutil.rmtree("run")
+
+    def test_train_scf_pulay_single_basis_validation(self):
+        system = System(
+            charges=self.charges[0],
+            n_electrons=int(self.n_electrons[0]),
+            centers=self.centers[0],
+            grid=self.grid,
+        )
+        basis = GridBasis(system)
+        for xc_nn in self.models:
+            task = TrainingTask(
+                xc_nn,
+                basis,
+                system.occ("KS"),
+                SCFData(self.E_truth[0], self.D_truth[0]),
+                steps=1,
+                mixer="pulay",
+                max_iterations=2,
+                enforce_symmetry=True,
+            )
+            task.fit(
+                "run/test",
+                device="cpu",
+                validation_set=(
+                    basis,
+                    system.occ("KS"),
+                    SCFData(self.E_truth[0], self.D_truth[0]),
+                ),
+                validation_step=1,
+            )
+        shutil.rmtree("run")

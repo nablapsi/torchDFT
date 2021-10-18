@@ -180,3 +180,47 @@ def test_batched_solve_scf():
         for i in range(systembatch.nbatch):
             assert_allclose(P_list[i], tape[-1][0][i])
             assert_allclose(E_list[i], tape[-1][1][i])
+
+
+def test_pulaydensity_ks_of():
+    charges = torch.tensor([1.0, 1.0])
+    centers = torch.tensor([0.0, 1.401118437])
+    nelectrons = 2
+    grid = torch.arange(-10, 10, 0.1)
+    H2 = System(nelectrons, charges, centers, grid)
+    basis = GridBasis(H2)
+    density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d(), mixer="pulaydensity")
+    density_of, energy_of = solve_scf(
+        basis, H2.occ(mode="OF"), Lda1d(), mixer="pulaydensity"
+    )
+    assert_allclose(density_ks, density_of)
+    assert_allclose(energy_ks, energy_of)
+
+
+def test_pulaydensity_h2_gauss():
+    mol = gto.M(atom="H 0 0 0; H 0 0 1.1", basis="cc-pvdz", verbose=3)
+    mf = dft.RKS(mol)
+    mf.init_guess = "1e"
+    mf.xc = "lda,pw"
+    occ = torch.tensor([2])
+    energy_true = mf.kernel()
+    basis = GaussianBasis(mol)
+    density, energy = solve_scf(
+        basis, occ, LdaPw92(), mixer="pulaydensity", use_xitorch=False
+    )
+    assert_allclose(energy, energy_true)
+
+
+def test_pulaydensity_h2_gauss_pbe():
+    mol = gto.M(atom="H 0 0 0; H 0 0 1.1", basis="cc-pvdz", verbose=3)
+    mf = dft.RKS(mol)
+    mf.init_guess = "1e"
+    mf.xc = "pbe"
+    occ = torch.tensor([2])
+    energy_true = mf.kernel()
+    basis = GaussianBasis([mol])
+    mixer_kwargs = {"precondition": False, "regularization": 0}
+    density, energy = solve_scf(
+        basis, occ, PBE(), mixer="pulaydensity", mixer_kwargs=mixer_kwargs
+    )
+    assert_allclose(energy[0], energy_true)
