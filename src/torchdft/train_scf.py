@@ -155,15 +155,18 @@ class TrainingTask(nn.Module):
         metrics.update(basis.density_metrics_fn(data_pred.density[-1], data.density))
         return metrics
 
-    def metrics_fn(self) -> Metrics:
+    def metrics_fn(
+        self,
+        basis: Union[Basis, nn.ModuleList],
+        occ: Tensor,
+        data: SCFData,
+    ) -> Metrics:
         """Evaluate the losses on current model."""
-        if isinstance(self.basis, Basis):
-            return self._metrics_fn(self.basis, self.occ, self.data)
+        if isinstance(basis, Basis):
+            return self._metrics_fn(basis, occ, data)
         metrics = [
             self._metrics_fn(basis, occ, SCFData(*data))
-            for basis, occ, *data in zip(
-                self.basis, self.occ, self.data.energy, self.data.density
-            )
+            for basis, occ, *data in zip(basis, occ, data.energy, data.density)
         ]
         metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
         metrics["loss/energy"] = (metrics["loss/energy"] ** 2).mean().sqrt()
@@ -178,7 +181,7 @@ class TrainingTask(nn.Module):
     def training_step(self) -> Metrics:
         """Execute a training step."""
         assert self.training
-        metrics = self.metrics_fn()
+        metrics = self.metrics_fn(self.basis, self.occ, self.data)
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
             p.grad = p.grad / (2.0 * self.train_samples * metrics["loss"])
