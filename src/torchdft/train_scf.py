@@ -9,7 +9,6 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Tuple, Union
 
-import numpy as np
 import torch
 from torch import Tensor, nn
 from torch.utils.tensorboard import SummaryWriter
@@ -216,7 +215,7 @@ class TrainingTask(nn.Module):
                 line_search_fn="strong_wolfe",
                 max_eval=self.steps,
                 max_iter=self.steps,
-                tolerance_change=np.nan,
+                tolerance_change=0e0,
             )
         else:
             opt = torch.optim.AdamW(self.functional.parameters(), lr=1e-2)
