@@ -51,7 +51,7 @@ class GlobalConvolutionalLayer(nn.Module):
         self.register_buffer("g", (grid[:, None] - grid).abs(), persistent=False)
         self.maxval = maxval
         self.minval = minval
-        self.xi = nn.Parameter(torch.Tensor(self.channels))
+        self.xi = nn.Parameter(torch.Tensor(self.channels - 1))
 
         nn.init.uniform_(self.xi, a=-1.0, b=1.0)
 
@@ -63,10 +63,16 @@ class GlobalConvolutionalLayer(nn.Module):
             grid: torch tensor of dimension(grid_dim,)
         """
         xi = 1 / (self.minval + (self.maxval - self.minval) * torch.sigmoid(self.xi))
-        expo = (-(self.g[None, :, :] * xi[:, None, None])).exp()
-        integral = torch.einsum("i, jkl, ilm -> jim", 5e-1 * xi, density, expo)
+        expo = (
+            (-(self.g[None, :, :] * xi[:, None, None])).exp()
+            * 5e-1
+            * xi[:, None, None]
+            * self.dx
+        )
+        integral = torch.einsum("jkl, ilm -> jim", density, expo)
+        integral = torch.cat((integral, density), 1)
 
-        return integral * self.dx
+        return integral
 
 
 class Conv1dPileLayers(nn.Module):

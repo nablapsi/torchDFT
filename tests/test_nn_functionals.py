@@ -49,21 +49,22 @@ class TestGlobalConvolutionalLayer:
             + (gconvlayer.maxval - gconvlayer.minval) * torch.sigmoid(gconvlayer.xi)
         )
         # Unrolled calculation.
-        a = torch.zeros([nchannels, ngrid, ngrid])
-        for i in range(nchannels):
+        a = torch.zeros([nchannels - 1, ngrid, ngrid])
+        for i in range(nchannels - 1):
             for j in range(ngrid):
                 for k in range(ngrid):
                     a[i, j, k] += gconvlayer.g[j, k] * xi[i]
 
         a = (-a).exp()
 
-        uvalue = torch.zeros(nbatch, nchannels, ngrid)
+        uvalue = torch.zeros(nbatch, nchannels - 1, ngrid)
         for i in range(nbatch):
-            for j in range(nchannels):
+            for j in range(nchannels - 1):
                 for k in range(ngrid):
                     for l in range(ngrid):
                         uvalue[i, j, l] += density[i, 0, k] * a[j, k, l] * xi[j]
         uvalue *= 5e-1 * gconvlayer.dx
+        uvalue = torch.cat((uvalue, density), dim=1)
 
         assert_allclose(value, uvalue)
 
