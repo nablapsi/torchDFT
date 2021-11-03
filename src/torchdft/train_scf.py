@@ -192,13 +192,14 @@ class TrainingTask(nn.Module):
         workdir: str,
         device: str = "cuda",
         seed: int = 0,
-        with_lbfgs: bool = True,
         validation_set: Tuple[
             Union[Basis, Iterable[Basis]],
             Tensor,
             Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
         ] = None,
         validation_step: int = 0,
+        with_adam: bool = False,
+        loss_threshold: float = 0.0,
     ) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir)
@@ -209,17 +210,6 @@ class TrainingTask(nn.Module):
         log.info(f"Moving to device ({device})...")
         self.to(device)
         chkpt = CheckpointStore()
-        if with_lbfgs:
-            opt: torch.optim.Optimizer = torch.optim.LBFGS(
-                self.functional.parameters(),
-                line_search_fn="strong_wolfe",
-                max_eval=self.steps,
-                max_iter=self.steps,
-                tolerance_change=0e0,
-            )
-        else:
-            opt = torch.optim.AdamW(self.functional.parameters(), lr=1e-2)
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, patience=100)
         if validation_set is not None:
             assert validation_step
             v_basis, v_occ, v_data, v_samples = self.prepare_data(
@@ -264,10 +254,15 @@ class TrainingTask(nn.Module):
                 step += 1
                 return metrics["loss"].item()
 
-            if with_lbfgs:
-                opt.step(closure)
-            else:
-                for _ in range(self.steps):
+            _adam_steps = 0
+            if with_adam:
+                opt: torch.optim.Optimizer = torch.optim.AdamW(
+                    self.functional.parameters(), lr=1e-2
+                )
+                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    opt, patience=100
+                )
+                for _adam_steps in range(self.steps):
                     if isinstance(self.basis, GaussianBasis):
                         self.basis.mask = (
                             torch.rand_like(self.basis.grid_weights) <= 0.0025
@@ -277,6 +272,16 @@ class TrainingTask(nn.Module):
                     writer.add_scalar("learning_rate", lr, step)
                     opt.step()
                     scheduler.step(loss)
+                    if loss < loss_threshold:
+                        break
+            opt = torch.optim.LBFGS(
+                self.functional.parameters(),
+                line_search_fn="strong_wolfe",
+                max_eval=self.steps - _adam_steps,
+                max_iter=self.steps - _adam_steps,
+                tolerance_change=0e0,
+            )
+            opt.step(closure)
 
         torch.save(metrics, workdir / "metrics.pt")
         chkpt.replace(self.functional.state_dict(), workdir / "model.pt")
