@@ -102,6 +102,8 @@ class Conv1dPileLayers(nn.Module):
                     bias=False,
                 )
             )
+        for layer in self.layers:
+            torch.nn.init.kaiming_uniform_(layer.weight)
         self.sign = -1 if negative_transform else 1
 
     def forward(self, x: Tensor) -> Tensor:
