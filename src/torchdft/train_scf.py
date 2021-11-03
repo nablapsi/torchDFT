@@ -118,7 +118,9 @@ class TrainingTask(nn.Module):
             assert data.density.shape[0] == samples
         return basis, occ, data, samples
 
-    def eval_model(self, basis: Basis, occ: Tensor) -> Tuple[SCFData, Metrics]:
+    def eval_model(
+        self, basis: Basis, occ: Tensor, **kwargs: Any
+    ) -> Tuple[SCFData, Metrics]:
         """Evaluate model provided a basis and orbital occupation numbers."""
         tape: List[Tuple[Tensor, Tensor]] = []
         try:
@@ -128,7 +130,7 @@ class TrainingTask(nn.Module):
                 self.functional,
                 tape=tape,
                 create_graph=self.training,
-                **self.kwargs,
+                **kwargs,
             )
         except SCFNotConvergedError:
             pass
@@ -139,7 +141,7 @@ class TrainingTask(nn.Module):
         return SCFData(E_pred, n_pred), metrics
 
     def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
-        data_pred, metrics = self.eval_model(basis, occ)
+        data_pred, metrics = self.eval_model(basis, occ, **self.kwargs)
         N = occ.sum(dim=-1)
         energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
         density_loss_sq = (
