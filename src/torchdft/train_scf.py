@@ -151,15 +151,24 @@ class TrainingTask(nn.Module):
         self.grad_norm = grad_out[0].norm().item()
 
     def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
-        data_pred, metrics = self.eval_model(basis, occ, **self.kwargs)
-        N = occ.sum(dim=-1)
-        energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
-        density_loss_sq = (
-            basis.density_mse(data_pred.density[-1] - data.density) / N
-        ).mean()
-        loss_sq = energy_loss_sq + density_loss_sq
-        if self.training:
-            loss_sq.backward()
+        kwargs_list = [self.kwargs]
+        if self.training and hasattr(self, "safe_kwargs"):
+            kwargs_list.append(self.safe_kwargs)
+            grad = self._clone_param_grad()
+        for kwargs in kwargs_list:
+            data_pred, metrics = self.eval_model(basis, occ, **kwargs)
+            N = occ.sum(dim=-1)
+            energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
+            density_loss_sq = (
+                (basis.density_mse(data_pred.density[-1] - data.density)) / N
+            ).mean()
+            loss_sq = energy_loss_sq + density_loss_sq
+            if self.training:
+                if hasattr(self, "safe_kwargs"):
+                    self._set_param_grad(grad)
+                loss_sq.backward()
+                if self.grad_norm < 1e-4:
+                    break
         metrics["loss"] = loss_sq.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/density"] = density_loss_sq.detach().sqrt()
@@ -212,6 +221,7 @@ class TrainingTask(nn.Module):
         validation_step: int = 0,
         with_adam: bool = False,
         loss_threshold: float = 0.0,
+        safe_kwargs: dict[str, Any] = None,
     ) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir)
@@ -230,6 +240,9 @@ class TrainingTask(nn.Module):
             v_basis.to(device)
             v_occ = v_occ.to(device)
             v_data.to(device)
+        if safe_kwargs:
+            self.safe_kwargs = dict(self.kwargs)
+            self.safe_kwargs.update(safe_kwargs)
         log.info("Initialized training")
         step = 0
         last_log = 0.0
@@ -312,3 +325,17 @@ class TrainingTask(nn.Module):
             ]
         ).norm()
         writer.add_scalar("grad/norm", grad_norm, step)
+
+    def _clone_param_grad(self) -> List[Tensor]:
+        return [
+            p.grad.clone(memory_format=torch.contiguous_format)
+            for p in self.functional.parameters()
+            if p.grad is not None
+        ]
+
+    def _set_param_grad(self, params_grad: List[Tensor]) -> None:
+        if params_grad is None:
+            pass
+        self.functional.zero_grad()
+        for p, pgrad in zip(self.functional.parameters(), params_grad):
+            p.grad.copy_(pgrad)
