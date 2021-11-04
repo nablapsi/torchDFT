@@ -85,6 +85,7 @@ class TrainingTask(nn.Module):
         self.data = data
         self.steps = steps
         self.kwargs = kwargs
+        self.functional.register_full_backward_hook(self.hook)
 
     def prepare_data(
         self,
@@ -139,6 +140,15 @@ class TrainingTask(nn.Module):
         E_pred = torch.stack(E_pred)
         n_pred = basis.density(torch.stack(n_pred))
         return SCFData(E_pred, n_pred), metrics
+
+    def hook(
+        self,
+        mod: torch.nn.Module,
+        grad_in: Union[Tuple[Tensor, ...], Tensor],
+        grad_out: Union[Tuple[Tensor, ...], Tensor],
+    ) -> None:
+        assert isinstance(grad_out, tuple)
+        self.grad_norm = grad_out[0].norm().item()
 
     def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
         data_pred, metrics = self.eval_model(basis, occ, **self.kwargs)
