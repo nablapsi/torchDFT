@@ -317,13 +317,7 @@ class TrainingTask(nn.Module):
         """After step tasks."""
         for k, v in metrics.items():
             writer.add_scalar(k, v, step)
-        grad_norm = torch.cat(
-            [
-                p.grad.flatten()
-                for p in self.functional.parameters()
-                if p.grad is not None
-            ]
-        ).norm()
+        grad_norm = self.grad_norm_fn()
         writer.add_scalar("grad/norm", grad_norm, step)
 
     def _clone_param_grad(self) -> List[Tensor]:
@@ -339,3 +333,12 @@ class TrainingTask(nn.Module):
         self.functional.zero_grad()
         for p, pgrad in zip(self.functional.parameters(), params_grad):
             p.grad.copy_(pgrad)
+
+    def grad_norm_fn(self) -> Tensor:
+        return torch.cat(
+            [
+                p.grad.flatten()
+                for p in self.functional.parameters()
+                if p.grad is not None
+            ]
+        ).norm()
