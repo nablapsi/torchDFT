@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
 from .basis import Basis
-from .errors import SCFNotConvergedError
+from .errors import GradientError, SCFNotConvergedError
 from .functional import Functional
 from .gaussbasis import GaussianBasis
 from .scf import solve_scf
@@ -208,7 +208,7 @@ class TrainingTask(nn.Module):
         assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
-    def fit(
+    def fit(  # noqa: C901 TODO too complex
         self,
         workdir: str,
         device: str = "cuda",
@@ -307,9 +307,14 @@ class TrainingTask(nn.Module):
                 tolerance_change=0e0,
             )
             opt.step(closure)
-
         torch.save(metrics, workdir / "metrics.pt")
         chkpt.replace(self.functional.state_dict(), workdir / "model.pt")
+        grad_norm = self.grad_norm_fn()
+        if step < self.steps and grad_norm > 1e-3:
+            raise GradientError(
+                "Model stopped improving but big gradient norm found:"
+                + f"{grad_norm}. Probably wrong gradient was evaluated."
+            )
 
     def after_step(
         self, step: int, metrics: Dict[str, Tensor], writer: SummaryWriter
