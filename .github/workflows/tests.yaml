@@ -15,8 +15,9 @@ jobs:
         id: setup-python
       - name: Install Poetry
         run: |
-          curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python -
-          echo $HOME/.poetry/bin >>$GITHUB_PATH
+          curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | python -
+          $HOME/.local/share/pypoetry/venv/bin/pip install -U poetry-dynamic-versioning
+          echo $HOME/.local/bin >>$GITHUB_PATH
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
@@ -33,7 +34,7 @@ jobs:
             ${{ env.VIRTUAL_ENV }}/lib/python${{ matrix.python-version }}/site-packages
           key: ${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
       - name: Install dependencies
-        run: pip install -U poetry-dynamic-versioning pytest coverage
+        run: pip install -U pytest coverage
       - name: Build
         run: poetry build
       - name: Install
