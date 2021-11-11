@@ -18,3 +18,7 @@ class SCFNotConvergedError(TorchDFTError):
 
 class NanError(TorchDFTError):
     pass
+
+
+class GradientError(TorchDFTError):
+    pass
