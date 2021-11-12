@@ -151,13 +151,17 @@ class RadialBasis(Basis):
     def get_laplacian(self) -> Tensor:
         """Finite difference approximation of Laplacian operator."""
         grid_dim = self.grid.size(0)
-        return (
+        laplacian = (
             (-2.5 * self.grid.new_ones([grid_dim]).diag_embed())
             + (4.0 / 3.0 * self.grid.new_ones([grid_dim - 1]).diag_embed(offset=1))
             + (4.0 / 3.0 * self.grid.new_ones([grid_dim - 1]).diag_embed(offset=-1))
             + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=2))
             + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=-2))
-        ) / self.dx ** 2
+        )
+        laplacian[0, 0] += (1 + self.dx * self.charges) / (
+            12 * (1 - self.dx * self.charges)
+        )
+        return laplacian / self.dx ** 2
 
     def get_hartree_potential(self, density: Tensor, grid: Tensor) -> Tensor:
         """Evaluate Hartree potential."""
