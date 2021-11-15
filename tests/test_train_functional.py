@@ -9,12 +9,12 @@ from torchdft.utils import System, exp_coulomb
 
 
 class TestTrainScf:
-    charges = torch.tensor([[1, 0, 1], [1, 1, 1]])
+    Z = torch.tensor([[1, 0, 1], [1, 1, 1]])
     centers = torch.tensor([[-1, 0, 1], [1, 0, 1]])
     n_electrons = torch.tensor([[2], [3]])
-    grid = torch.arange(-10, 10, 1)
-    E_truth = torch.rand(charges.shape[0])
-    D_truth = torch.rand((charges.shape[0], grid.shape[0]))
+    grid = torch.arange(-10, 10, 1.0)
+    E_truth = torch.rand(Z.shape[0])
+    D_truth = torch.rand((Z.shape[0], grid.shape[0]))
 
     models = [
         Conv1dFunctionalNet(
@@ -47,12 +47,11 @@ class TestTrainScf:
     ]
 
     basislist = []
-    for i, charge in enumerate(charges):
+    for i, Zi in enumerate(Z):
         basislist.append(
             GridBasis(
                 System(
-                    charges=charge,
-                    n_electrons=int(n_electrons[i]),
+                    Z=Zi,
                     centers=centers[i],
                     grid=grid,
                 )
@@ -109,8 +108,7 @@ class TestTrainScf:
 
     def test_train_scf_pulay_single_basis(self):
         system = System(
-            charges=self.charges[0],
-            n_electrons=int(self.n_electrons[0]),
+            Z=self.Z[0],
             centers=self.centers[0],
             grid=self.grid,
         )
@@ -131,8 +129,7 @@ class TestTrainScf:
 
     def test_train_scf_pulay_single_basis_validation(self):
         system = System(
-            charges=self.charges[0],
-            n_electrons=int(self.n_electrons[0]),
+            Z=self.Z[0],
             centers=self.centers[0],
             grid=self.grid,
         )

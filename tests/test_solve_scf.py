@@ -15,22 +15,20 @@ from torchdft.xc_functionals import PBE, Lda1d, LdaPw92
 
 
 def test_h2():
-    charges = torch.tensor([1.0, 1.0], dtype=torch.float64)
+    Z = torch.tensor([1, 1])
     centers = torch.tensor([0.0, 1.401118437], dtype=torch.float64)
-    nelectrons = 2
     grid = torch.arange(-10, 10, 0.1, dtype=torch.float64)
-    H2 = System(nelectrons, charges, centers, grid)
+    H2 = System(Z=Z, centers=centers, grid=grid)
     basis = GridBasis(H2)
     density, energy = solve_scf(basis, H2.occ(), Lda1d())
     assert_allclose(energy, -1.4046211)
 
 
 def test_ks_of():
-    charges = torch.tensor([1.0, 1.0])
+    Z = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
-    nelectrons = 2
     grid = torch.arange(-10, 10, 0.1)
-    H2 = System(nelectrons, charges, centers, grid)
+    H2 = System(Z=Z, centers=centers, grid=grid)
     basis = GridBasis(H2)
     density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d())
     density_of, energy_of = solve_scf(basis, H2.occ(mode="OF"), Lda1d())
@@ -57,9 +55,9 @@ def test_h2_gauss_pbe():
     mf.xc = "pbe"
     occ = torch.tensor([2])
     energy_true = mf.kernel()
-    basis = GaussianBasis([mol])
+    basis = GaussianBasis(mol)
     density, energy = solve_scf(basis, occ, PBE(), mixer="pulay")
-    assert_allclose(energy[0], energy_true)
+    assert_allclose(energy, energy_true)
 
 
 def test_batched_ks_iteration():
@@ -78,7 +76,7 @@ def test_batched_ks_iteration():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(charges=charges, n_electrons=n, centers=centers, grid=grid)
+        system = System(Z=charges, centers=centers, grid=grid)
         systems.append(system)
         gridbasis.append(GridBasis(system))
 
@@ -86,7 +84,7 @@ def test_batched_ks_iteration():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(charges=charges, n_electrons=n, centers=centers, grid=grid)
+        system = System(Z=charges, centers=centers, grid=grid)
         systems.append(system)
         gridbasis.append(GridBasis(system))
 
@@ -140,18 +138,18 @@ def test_batched_solve_scf():
     systems, gridbasis = [], []
     # Genetate some H2 and H3 systems:
     n = 2
-    charges = torch.ones(n)
+    Z = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(charges=charges, n_electrons=n, centers=centers, grid=grid)
+        system = System(Z=Z, centers=centers, grid=grid)
         systems.append(system)
         gridbasis.append(GridBasis(system))
 
     n = 3
-    charges = torch.ones(n)
+    Z = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(charges=charges, n_electrons=n, centers=centers, grid=grid)
+        system = System(Z=Z, centers=centers, grid=grid)
         systems.append(system)
         gridbasis.append(GridBasis(system))
 
@@ -184,11 +182,10 @@ def test_batched_solve_scf():
 
 
 def test_pulaydensity_ks_of():
-    charges = torch.tensor([1.0, 1.0])
+    Z = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
-    nelectrons = 2
     grid = torch.arange(-10, 10, 0.1)
-    H2 = System(nelectrons, charges, centers, grid)
+    H2 = System(Z=Z, centers=centers, grid=grid)
     basis = GridBasis(H2)
     density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d(), mixer="pulaydensity")
     density_of, energy_of = solve_scf(
@@ -219,12 +216,12 @@ def test_pulaydensity_h2_gauss_pbe():
     mf.xc = "pbe"
     occ = torch.tensor([2])
     energy_true = mf.kernel()
-    basis = GaussianBasis([mol])
+    basis = GaussianBasis(mol)
     mixer_kwargs = {"precondition": False, "regularization": 0}
     density, energy = solve_scf(
         basis, occ, PBE(), mixer="pulaydensity", mixer_kwargs=mixer_kwargs
     )
-    assert_allclose(energy[0], energy_true)
+    assert_allclose(energy, energy_true)
 
 
 def test_Li_radialbasis():
@@ -235,13 +232,56 @@ def test_Li_radialbasis():
         basis, torch.tensor([2, 1]), LdaPw92(), mixer="pulay", density_threshold=1e-9
     )
     # RadialBasis Li energy
-    charges = torch.tensor(3.0, dtype=torch.float64)
-    centers = torch.tensor(0.0, dtype=torch.float64)
-    nelectrons = 3
     grid = torch.arange(1e-2, 10, 1e-2, dtype=torch.float64)
-    Li = System(nelectrons, charges, centers, grid)
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid)
     basis = RadialBasis(Li)
     density, energy = solve_scf(
-        basis, Li.occ(), LdaPw92(), mixer="pulay", density_threshold=1e-9
+        basis,
+        Li.occ("aufbau"),
+        LdaPw92(),
+        mixer="pulay",
+        density_threshold=1e-9,
+        extra_fock_channel=True,
     )
     assert_allclose(energy, energy_truth, atol=1.6e-3, rtol=1e-4)
+
+
+def test_batched_radialbasis():
+    grid = torch.arange(1e-2, 10, 1e-2, dtype=torch.float64)
+    # Li
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid)
+    # C
+    C = System(Z=torch.tensor([6]), centers=torch.tensor([0]), grid=grid)
+    batch = SystemBatch([Li, C])
+    Libasis = RadialBasis(Li)
+    Cbasis = RadialBasis(C)
+    batchedbasis = RadialBasis(batch)
+    P_Li, E_Li = solve_scf(
+        Libasis,
+        Li.occ("aufbau"),
+        functional=LdaPw92(),
+        mixer="pulaydensity",
+        density_threshold=1e-9,
+        extra_fock_channel=True,
+    )
+    P_C, E_C = solve_scf(
+        Cbasis,
+        C.occ("aufbau"),
+        functional=LdaPw92(),
+        mixer="pulaydensity",
+        density_threshold=1e-9,
+        extra_fock_channel=True,
+    )
+    P, E = solve_scf(
+        batchedbasis,
+        batch.occ("aufbau"),
+        functional=LdaPw92(),
+        mixer="pulaydensity",
+        density_threshold=1e-9,
+        extra_fock_channel=True,
+    )
+
+    assert_allclose(E_Li, E[0])
+    assert_allclose(P_Li, P[0])
+    assert_allclose(E_C, E[1])
+    assert_allclose(P_C, P[1])

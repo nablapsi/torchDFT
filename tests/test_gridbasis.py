@@ -142,9 +142,8 @@ class TestFunctionals:
         grid = torch.linspace(1, 5, 100, dtype=torch.double)
         system = System(
             centers=torch.tensor([0]),
-            charges=torch.tensor([1]),
+            Z=torch.tensor([1]),
             grid=grid,
-            n_electrons=1,
         )
         basis = GridBasis(system)
         density = gaussian(grid, mean, std)

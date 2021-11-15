@@ -14,9 +14,7 @@ class TestComposedFunctional:
     density = Density(gaussian(grid, 0, 1))
     # System and basis are declared in order to access basis._get_density_gradient
     # method.
-    system = System(
-        centers=torch.tensor([0]), charges=torch.tensor([1]), n_electrons=1, grid=grid
-    )
+    system = System(centers=torch.tensor([0]), Z=torch.tensor([1]), grid=grid)
     basis = GridBasis(system)
     batched_density = Density(torch.stack([gaussian(grid, 0, 1), gaussian(grid, 1, 1)]))
 

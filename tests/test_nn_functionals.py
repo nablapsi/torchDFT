@@ -139,11 +139,10 @@ class TestGlobalFunctionalNet:
 
 
 class TestGgaConv1dFunctionalNet:
-    grid = torch.arange(-10, 10, 1)
+    grid = torch.arange(-10.0, 10.0, 1.0)
     system = System(
         centers=torch.tensor([0.0]),
-        charges=torch.tensor([1]),
-        n_electrons=1,
+        Z=torch.tensor([1]),
         grid=grid,
     )
 
