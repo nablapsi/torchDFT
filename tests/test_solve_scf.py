@@ -8,6 +8,7 @@ from torch.testing import assert_allclose
 from torchdft.errors import SCFNotConvergedError
 from torchdft.gaussbasis import GaussianBasis
 from torchdft.gridbasis import GridBasis
+from torchdft.radialbasis import RadialBasis
 from torchdft.scf import ks_iteration, solve_scf
 from torchdft.utils import GeneralizedDiagonalizer, System, SystemBatch
 from torchdft.xc_functionals import PBE, Lda1d, LdaPw92
@@ -224,3 +225,23 @@ def test_pulaydensity_h2_gauss_pbe():
         basis, occ, PBE(), mixer="pulaydensity", mixer_kwargs=mixer_kwargs
     )
     assert_allclose(energy[0], energy_true)
+
+
+def test_Li_radialbasis():
+    # True Li energy
+    mol = gto.M(atom="Li 0 0 0", basis="cc-pv5z", verbose=3, spin=1)
+    basis = GaussianBasis(mol)
+    density, energy_truth = solve_scf(
+        basis, torch.tensor([2, 1]), LdaPw92(), mixer="pulay", density_threshold=1e-9
+    )
+    # RadialBasis Li energy
+    charges = torch.tensor(3.0, dtype=torch.float64)
+    centers = torch.tensor(0.0, dtype=torch.float64)
+    nelectrons = 3
+    grid = torch.arange(1e-2, 10, 1e-2, dtype=torch.float64)
+    Li = System(nelectrons, charges, centers, grid)
+    basis = RadialBasis(Li)
+    density, energy = solve_scf(
+        basis, Li.occ(), LdaPw92(), mixer="pulay", density_threshold=1e-9
+    )
+    assert_allclose(energy, energy_truth, atol=1.6e-3, rtol=1e-4)
