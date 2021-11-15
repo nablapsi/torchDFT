@@ -11,7 +11,7 @@ from .basis import Basis
 from .density import Density
 from .errors import NanError
 from .functional import Functional
-from .utils import System, SystemBatch, get_dx
+from .utils import System, SystemBatch, fin_diff_matrix, get_dx
 
 __all__ = ["RadialBasis"]
 
@@ -46,6 +46,10 @@ class RadialBasis(Basis):
             torch.full_like(
                 self.V_ext[:, 0], 1.0, device=self.grid.device
             ).diag_embed(),
+        )
+        self.register_buffer(
+            "grad_operator",
+            fin_diff_matrix(self.grid.shape[0], 5, 1, dtype=self.grid.dtype) / self.dx,
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
@@ -92,8 +96,7 @@ class RadialBasis(Basis):
         return v_H.diag_embed(), v_func.diag_embed(), E_func
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:
-        grad_operator = self.get_gradient()
-        return torch.einsum("ij, ...j -> ...i", grad_operator, density)
+        return torch.einsum("ij, ...j -> ...i", self.grad_operator, density)
 
     def density_mse(self, density: Tensor) -> Tensor:
         return (density.pow(2) * self.dv).sum(dim=-1)
@@ -110,16 +113,6 @@ class RadialBasis(Basis):
     ) -> Dict[str, Tensor]:
         Q, Q_ref = (self.quadrupole(x).detach() for x in [density, density_ref])
         return {"loss/quadrupole": ((Q - Q_ref) ** 2).mean().sqrt()}
-
-    def get_gradient(self) -> Tensor:
-        """Finite difference approximation of gradient operator."""
-        grid_dim = self.grid.size(0)
-        return (
-            (2.0 / 3.0 * self.grid.new_ones([grid_dim - 1]).diag_embed(offset=1))
-            + (-2.0 / 3.0 * self.grid.new_ones([grid_dim - 1]).diag_embed(offset=-1))
-            + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=2))
-            + (1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=-2))
-        ) / self.dx
 
     def get_laplacian(self) -> Tensor:
         """Finite difference approximation of Laplacian operator."""
