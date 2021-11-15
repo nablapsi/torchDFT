@@ -37,15 +37,13 @@ class RadialBasis(Basis):
         self.register_buffer("grid", self.system.grid)
         self.register_buffer("dx", get_dx(self.grid))
         self.register_buffer("dv", 4 * math.pi * self.grid ** 2 * self.dx)
-        self.register_buffer("charges", self.system.charges)
+        self.register_buffer("charges", self.system.charges.squeeze(-1))
         self.register_buffer("E_nuc", torch.tensor(0.0))
         self.register_buffer("T", -5e-1 * self.get_laplacian())
         self.register_buffer("V_ext", (-self.system.charges / self.grid).diag_embed())
         self.register_buffer(
             "S",
-            torch.full_like(
-                self.V_ext[:, 0], 1.0, device=self.grid.device
-            ).diag_embed(),
+            torch.full_like(self.grid, 1.0, device=self.grid.device).diag_embed(),
         )
         self.register_buffer(
             "grad_operator",
@@ -124,7 +122,9 @@ class RadialBasis(Basis):
             + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=2))
             + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=-2))
         )
-        laplacian[0, 0] += (1 + self.dx * self.charges) / (
+        if self.charges.size():
+            laplacian = torch.stack((laplacian,) * self.charges.shape[0])
+        laplacian[..., 0, 0] += (1 + self.dx * self.charges) / (
             12 * (1 - self.dx * self.charges)
         )
         return laplacian / self.dx ** 2
@@ -134,9 +134,8 @@ class RadialBasis(Basis):
         # https://gitlab.com/aheld84/radialdft/-/blob/master/radialdft/poisson.py
         ndV = density * self.dv
         u_l = grid.new_zeros(density.shape)
-        u_l[0] = 0
-        u_l[1:] = torch.cumsum(ndV[:-1], dim=-1)
+        u_l[..., 0] = 0
+        u_l[..., 1:] = torch.cumsum(ndV[..., :-1], dim=-1)
         u_l = u_l / grid
         u_r = torch.cumsum((ndV / grid).flip(-1), dim=-1).flip(-1)
-
         return u_l + u_r

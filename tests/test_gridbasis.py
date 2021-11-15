@@ -3,6 +3,7 @@ from torch.testing import assert_allclose
 
 from torchdft.density import Density
 from torchdft.gridbasis import (
+    GridBasis,
     get_external_potential,
     get_external_potential_energy,
     get_functional_energy,
@@ -11,7 +12,7 @@ from torchdft.gridbasis import (
     get_hartree_potential,
     get_laplacian,
 )
-from torchdft.utils import gaussian, get_dx, soft_coulomb
+from torchdft.utils import System, gaussian, get_dx, soft_coulomb
 from torchdft.xc_functionals import Lda1d
 
 
@@ -135,3 +136,17 @@ class TestFunctionals:
         ener = get_functional_energy(density, grid, LDA)
         ener.backward()
         assert_allclose(pot, density.value.grad / dx)
+
+    def test_get_gradient(self):
+        mean, std = 0, 1
+        grid = torch.linspace(1, 5, 100, dtype=torch.double)
+        system = System(
+            centers=torch.tensor([0]),
+            charges=torch.tensor([1]),
+            grid=grid,
+            n_electrons=1,
+        )
+        basis = GridBasis(system)
+        density = gaussian(grid, mean, std)
+        den_der = basis._get_density_gradient(density)
+        assert_allclose(den_der, -(grid - mean) / std * density, atol=1e-5, rtol=1e-4)
