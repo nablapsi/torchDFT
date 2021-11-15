@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
-from typing import Dict, Iterable, Tuple, Union
+from typing import Dict, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -14,33 +14,6 @@ from .functional import Functional
 from .utils import System, SystemBatch, get_dx
 
 __all__ = ["RadialBasis"]
-
-
-def fin_diff_coeffs(
-    stencil: Iterable[int], order: int, dtype: torch.dtype = torch.double
-) -> Tensor:
-    stencil = torch.tensor(stencil, dtype=dtype)
-    y = torch.zeros_like(stencil)
-    y[order] = math.factorial(order)
-    return torch.linalg.solve(
-        stencil ** torch.arange(len(stencil), dtype=stencil.dtype)[:, None], y
-    )
-
-
-def fin_diff_matrix(
-    n: int, size: int, order: int, dtype: torch.dtype = torch.double
-) -> Tensor:
-    assert n >= size
-    assert size % 2 == 1
-    x = torch.zeros((n, n), dtype=dtype)
-    b = (size - 1) // 2
-    coeffs = fin_diff_coeffs(range(-b, b + 1), order, dtype=dtype)
-    for i, c in enumerate(coeffs, start=-b):
-        x.diagonal(i)[:] = c
-    for i in range(b):
-        x[i, :size] = fin_diff_coeffs(range(-i, -i + size), order, dtype=dtype)
-        x[-1 - i, -size:] = -x[i, :size].flip(-1)
-    return x
 
 
 class RadialBasis(Basis):

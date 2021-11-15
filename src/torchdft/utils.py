@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Iterable, List, Tuple
 
 import torch
 from torch import Tensor
@@ -134,3 +134,32 @@ class GeneralizedDiagonalizer:
 
     def __call__(self, A: Tensor) -> Tuple[Tensor, Tensor]:
         return self.eigh(A, self.X)
+
+
+def fin_diff_coeffs(
+    stencil: Iterable[int], order: int, dtype: torch.dtype = torch.double
+) -> Tensor:
+    """Get coefficients for finite difference nth order derivative."""
+    stencil = torch.tensor(stencil, dtype=dtype)
+    y = torch.zeros_like(stencil)
+    y[order] = math.factorial(order)
+    return torch.linalg.solve(
+        stencil ** torch.arange(len(stencil), dtype=stencil.dtype)[:, None], y
+    )
+
+
+def fin_diff_matrix(
+    n: int, size: int, order: int, dtype: torch.dtype = torch.double
+) -> Tensor:
+    """Get matrix for finite difference nth order derivative."""
+    assert n >= size
+    assert size % 2 == 1
+    x = torch.zeros((n, n), dtype=dtype)
+    b = (size - 1) // 2
+    coeffs = fin_diff_coeffs(range(-b, b + 1), order, dtype=dtype)
+    for i, c in enumerate(coeffs, start=-b):
+        x.diagonal(i)[:] = c
+    for i in range(b):
+        x[i, :size] = fin_diff_coeffs(range(-i, -i + size), order, dtype=dtype)
+        x[-1 - i, -size:] = -x[i, :size].flip(-1)
+    return x
