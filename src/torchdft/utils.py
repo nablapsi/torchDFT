@@ -26,15 +26,39 @@ class System:
         self.centers = centers
         self.grid = grid
         self.n_electrons = int(self.Z.sum() - charge)
+        self.lmax = -1
 
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
+            self.lmax = -1
             n_occ = self.n_electrons // 2 + self.n_electrons % 2
             occ = self.centers.new_ones([n_occ])
             occ[: self.n_electrons // 2] += 1
         elif mode == "OF":
+            self.lmax = -1
             occ = self.centers.new_tensor([self.n_electrons])
+        elif mode == "aufbau":
+            occ = self.aufbau_occ()
         return occ
+
+    def aufbau_occ(self) -> Tensor:
+        order = "1s 2s 2p 3s 3p 4s 3d 4p 5s 4d 5p 6s 4f 5d 6p 7s 5f 6d 7p".split()
+        l = {"s": 0, "p": 1, "d": 2, "f": 3}
+        self.lmax = 0
+        nleft = self.n_electrons
+        nmax = 0
+        occ = self.grid.new_zeros([4, 7])
+        for elem in order:
+            ni, li = int(elem[0]), l[elem[1]]
+            if ni > nmax:
+                nmax = ni
+            if li > self.lmax:
+                self.lmax = li
+            occ[li, ni - li - 1] = min(nleft, 2 * (2 * li + 1))
+            nleft -= occ[li, ni - li - 1]
+            if nleft == 0:
+                break
+        return occ[: self.lmax + 1, :nmax]
 
 
 class SystemBatch:
@@ -66,6 +90,7 @@ class SystemBatch:
 
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
+            self.lmax = -1
             double_occ = self.n_electrons.div(2, rounding_mode="floor")
             n_occ = double_occ + self.n_electrons % 2
             occ = self.n_electrons.new_zeros(self.nbatch, int(n_occ.max()))
@@ -73,7 +98,18 @@ class SystemBatch:
                 occ[i, : int(n_occ[i])] = 1
                 occ[i, : int(double_occ[i])] += 1
         elif mode == "OF":
+            self.lmax = -1
             occ = self.n_electrons[:, None]
+        elif mode == "aufbau":
+            occ_list = [system.aufbau_occ() for system in self.systems]
+            occ_shapes = (torch.tensor([occ.shape for occ in occ_list]).max(0)).values
+            occ = self.grid.new_zeros(
+                (int(occ_shapes[0]), self.nbatch, int(occ_shapes[1]))
+            )
+            for ibatch, occi in enumerate(occ_list):
+                occ[ibatch, : occi.shape[0], : occi.shape[1]] = occi
+            self.lmax = max([system.lmax for system in self.systems])
+            occ = occ.squeeze(0)
         return occ
 
 
