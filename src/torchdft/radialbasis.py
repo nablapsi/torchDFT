@@ -51,7 +51,18 @@ class RadialBasis(Basis):
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
-        return self.S, self.T, self.V_ext
+        V_ext_l = self.V_ext
+        T = self.T
+        S = self.S
+        if self.system.lmax > -1:
+            V_ext_l = torch.stack((V_ext_l,) * (self.system.lmax + 1), dim=-3)
+            for l in range(self.system.lmax + 1):
+                V_ext_l[..., l, :, :] += (
+                    l * (l + 1) / (2 * self.grid ** 2)
+                ).diag_embed()
+            S = S[..., None, :, :]
+            T = T[..., None, :, :]
+        return S, T, V_ext_l
 
     def get_int_integrals(
         self,
@@ -81,7 +92,7 @@ class RadialBasis(Basis):
         if functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
 
-        v_H = self.get_hartree_potential(density.value, self.grid)
+        V_H = (self.get_hartree_potential(density.value, self.grid)).diag_embed()
         eps_func = functional(density) * density.value
         E_func = (eps_func * self.dv).sum(-1)
         (v_func,) = torch.autograd.grad(
@@ -91,7 +102,11 @@ class RadialBasis(Basis):
             E_func = E_func.detach()
         if torch.any(torch.isnan(v_func)):
             raise NanError()
-        return v_H.diag_embed(), v_func.diag_embed(), E_func
+        V_func = v_func.diag_embed()
+        if self.system.lmax > -1:
+            V_H = V_H[..., None, :, :]
+            V_func = V_func[..., None, :, :]
+        return V_H, V_func, E_func
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:
         return torch.einsum("ij, ...j -> ...i", self.grad_operator, density)
