@@ -4,7 +4,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-import torch
 from torch import Tensor, nn
 
 from .density import Density
@@ -14,7 +13,7 @@ class Functional(nn.Module, ABC):
     """Represents a density functional."""
 
     requires_grad: bool
-    per_electron = True
+    per_electron: bool = True
 
     @abstractmethod
     def forward(self, density: Density) -> Tensor:
@@ -31,12 +30,13 @@ class ComposedFunctional(Functional):
         self.functionals = nn.ModuleList(functionals)
         self.factors = factors if factors is not None else [1] * len(functionals)
         self.requires_grad = any(functional.requires_grad for functional in functionals)
+        self.per_electron = all([functional.per_electron for functional in functionals])
 
     def forward(self, density: Density) -> Tensor:
-        return torch.stack(
-            [
-                factor * functional(density)
-                for functional, factor in zip(self.functionals, self.factors)
-            ],
-            dim=-1,
-        ).sum(dim=-1)
+        eps = density.value.new_zeros(density.value.shape)
+        for factor, functional in zip(self.factors, self.functionals):
+            eps_func = factor * functional(density)
+            if not self.per_electron and functional.per_electron:
+                eps_func = eps_func * density.value
+            eps = eps + eps_func
+        return eps
