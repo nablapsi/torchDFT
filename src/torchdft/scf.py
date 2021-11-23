@@ -127,7 +127,9 @@ def solve_scf(  # noqa: C901 TODO too complex
         P_in, energy_prev = P_guess, torch.tensor([0e0])
     if enforce_symmetry and isinstance(basis, GridBasis):
         P_in = basis.symmetrize_P(P_in)
-    print_iterations = print_iterations if len(P_in.shape) == 2 else False
+    print_iterations = (
+        print_iterations if len(P_in.shape) == 2 or P_in.shape[0] == 1 else False
+    )
     if print_iterations:
         print("Iteration | Old energy / Ha | New energy / Ha | Density diff norm")
     for i in iterations or range(max_iterations):
