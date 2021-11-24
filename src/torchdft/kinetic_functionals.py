@@ -42,3 +42,13 @@ class VonWeizsaecker(Functional):
     def forward(self, density: Density) -> Tensor:
         assert density.grad is not None
         return 1.0 / 8.0 * density.grad ** 2 / density.value
+
+
+class ThomasFermi(Functional):
+    """Evaluate the Thomas Fermi kinetic energy in 3D."""
+
+    requires_grad: bool = False
+    per_electron = False
+
+    def forward(self, density: Density) -> Tensor:
+        return (3 / 10) * (3 * math.pi ** 2) ** (2 / 3) * density.value ** (5 / 3)
