@@ -30,7 +30,7 @@ class TestComposedFunctional:
             self.density.grad = self.basis._get_density_gradient(self.density.value)
 
         epsilon_composed = composed_functional(self.density)
-        epsilon1 = Lda1d()(self.density)
+        epsilon1 = Lda1d()(self.density) * self.density.value
         epsilon2 = VonWeizsaecker()(self.density)
         assert_allclose(epsilon_composed, epsilon1 + epsilon2)
 
@@ -46,7 +46,7 @@ class TestComposedFunctional:
             self.density.grad = self.basis._get_density_gradient(self.density.value)
 
         epsilon_composed = composed_functional(self.density)
-        epsilon1 = Lda1d()(self.density)
+        epsilon1 = Lda1d()(self.density) * self.density.value
         epsilon2 = VonWeizsaecker()(self.density)
         assert_allclose(epsilon_composed, factors[0] * epsilon1 + factors[1] * epsilon2)
 
@@ -64,6 +64,6 @@ class TestComposedFunctional:
             )
 
         epsilon_composed = composed_functional(self.batched_density)
-        epsilon1 = Lda1d()(self.batched_density)
+        epsilon1 = Lda1d()(self.batched_density) * self.batched_density.value
         epsilon2 = VonWeizsaecker()(self.batched_density)
         assert_allclose(epsilon_composed, factors[0] * epsilon1 + factors[1] * epsilon2)
