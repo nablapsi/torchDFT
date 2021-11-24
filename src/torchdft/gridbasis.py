@@ -252,8 +252,10 @@ def get_functional_energy(
 ) -> Tensor:
     """Evaluate functional energy."""
     dx = get_dx(grid)
-
-    return (functional(density) * density.value).sum(-1) * dx
+    eps = functional(density)
+    if functional.per_electron:
+        eps = eps * density.value
+    return eps.sum(-1) * dx
 
 
 def get_functional_energy_potential(

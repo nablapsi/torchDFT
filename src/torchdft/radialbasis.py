@@ -93,7 +93,9 @@ class RadialBasis(Basis):
             density.grad = self._get_density_gradient(density.value)
 
         V_H = (self.get_hartree_potential(density.value, self.grid)).diag_embed()
-        eps_func = functional(density) * density.value
+        eps_func = functional(density)
+        if functional.per_electron:
+            eps_func = eps_func * density.value
         E_func = (eps_func * self.dv).sum(-1)
         (v_func,) = torch.autograd.grad(
             eps_func.sum(), density.value, create_graph=create_graph
