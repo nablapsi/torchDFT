@@ -16,7 +16,7 @@ class System:
     """Represents an electronic system."""
 
     n_electrons: int
-    charges: Tensor
+    Z: Tensor
     centers: Tensor
     grid: Tensor
 
@@ -51,11 +51,11 @@ class SystemBatch:
             self.n_electrons[i] = system.n_electrons
 
         self.centers = self.systems[0].centers.new_zeros(self.nbatch, self.max_centers)
-        self.charges = self.centers.new_zeros(self.nbatch, self.max_centers)
+        self.Z = self.centers.new_zeros(self.nbatch, self.max_centers)
 
         for i, system in enumerate(systems):
             self.centers[i, : system.centers.shape[0]] = system.centers
-            self.charges[i, : system.centers.shape[0]] = system.charges
+            self.Z[i, : system.centers.shape[0]] = system.Z
 
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":

@@ -23,7 +23,7 @@ class GridBasis(Basis):
     grid: Tensor
     E_nuc: Tensor
     centers: Tensor
-    charges: Tensor
+    Z: Tensor
 
     def __init__(
         self,
@@ -36,11 +36,11 @@ class GridBasis(Basis):
         self.register_buffer("grid", self.system.grid)
         self.register_buffer("dx", get_dx(self.grid))
         self.register_buffer("centers", self.system.centers)
-        self.register_buffer("charges", self.system.charges)
+        self.register_buffer("Z", self.system.Z)
         self.register_buffer(
             "E_nuc",
             (
-                (system.charges[..., None, :] * system.charges[..., None])
+                (system.Z[..., None, :] * system.Z[..., None])
                 * interaction_fn(
                     system.centers[..., None, :] - system.centers[..., None]
                 )
@@ -52,7 +52,7 @@ class GridBasis(Basis):
         self.register_buffer(
             "V_ext",
             get_external_potential(
-                self.system.charges, self.system.centers, self.grid, self.interaction_fn
+                self.system.Z, self.system.centers, self.grid, self.interaction_fn
             ).diag_embed(),
         )
         self.register_buffer(
@@ -110,7 +110,7 @@ class GridBasis(Basis):
 
     def quadrupole(self, density: Tensor) -> Tensor:
         Q_el = -(self.grid ** 2 * density).sum(-1) * self.dx
-        Q_nuc = (self.centers ** 2 * self.charges).sum(-1)
+        Q_nuc = (self.centers ** 2 * self.Z).sum(-1)
         return Q_el + Q_nuc
 
     def density_metrics_fn(
