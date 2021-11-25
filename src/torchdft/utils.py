@@ -15,10 +15,17 @@ from torchdft import constants
 class System:
     """Represents an electronic system."""
 
-    n_electrons: int
-    Z: Tensor
-    centers: Tensor
-    grid: Tensor
+    def __init__(
+        self,
+        Z: Tensor,
+        centers: Tensor,
+        grid: Tensor,
+        charge: int = 0,
+    ):
+        self.Z = Z
+        self.centers = centers
+        self.grid = grid
+        self.n_electrons = int(self.Z.sum() - charge)
 
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
