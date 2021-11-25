@@ -19,7 +19,11 @@ DEFAULT_MIXER = "linear"
 
 
 def ks_iteration(
-    F: Tensor, S: Tensor, occ: Tensor, use_xitorch: bool = False
+    F: Tensor,
+    S: Tensor,
+    occ: Tensor,
+    use_xitorch: bool = False,
+    extra_fock_channel: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     n_occ = occ.shape[-1]
     if use_xitorch:
@@ -28,6 +32,11 @@ def ks_iteration(
     else:
         epsilon, C = GeneralizedDiagonalizer.eigh(F, S)
         epsilon, C = epsilon[..., :n_occ], C[..., :n_occ]
+    assert epsilon.shape == occ.shape
+    if extra_fock_channel:
+        C = C.transpose(-3, -2).flatten(start_dim=-2)
+        epsilon = epsilon.flatten(start_dim=-2)
+        occ = occ.flatten(start_dim=-2)
     P = (C * occ[..., None, :]) @ C.transpose(-2, -1)
     energy_orb = (epsilon * occ).sum(dim=-1)
     return P, energy_orb
@@ -93,6 +102,7 @@ def solve_scf(  # noqa: C901 TODO too complex
     mixer: str = None,
     P_guess: Tensor = None,
     mixer_kwargs: Dict[str, Any] = None,
+    extra_fock_channel: bool = False,
 ) -> Tuple[Tensor, Tensor]:
     """Given a system, evaluates its energy by solving the KS equations."""
     mixer = mixer or DEFAULT_MIXER
@@ -105,7 +115,13 @@ def solve_scf(  # noqa: C901 TODO too complex
     S_or_X = S if use_xitorch else GeneralizedDiagonalizer(S).X
     F = T + V_ext
     if P_guess is None:
-        P_in, energy_orb = ks_iteration(F, S_or_X, occ, use_xitorch=use_xitorch)
+        P_in, energy_orb = ks_iteration(
+            F,
+            S_or_X,
+            occ,
+            use_xitorch=use_xitorch,
+            extra_fock_channel=extra_fock_channel,
+        )
         energy_prev = energy_orb + basis.E_nuc
     else:
         P_in, energy_prev = P_guess, torch.tensor([0e0])
@@ -122,14 +138,20 @@ def solve_scf(  # noqa: C901 TODO too complex
         if mixer == "pulay":
             err = X.transpose(-1, -2) @ (F @ P_in @ S - S @ P_in @ F) @ X
             F = diis.step(F, err)
-        P_out, energy_orb = ks_iteration(F, S_or_X, occ, use_xitorch=use_xitorch)
+        P_out, energy_orb = ks_iteration(
+            F,
+            S_or_X,
+            occ,
+            use_xitorch=use_xitorch,
+            extra_fock_channel=extra_fock_channel,
+        )
         # TODO duplicate, should be made part of ks_iteration()
         if enforce_symmetry and isinstance(basis, GridBasis):
             P_out = basis.symmetrize_P(P_out)
         energy = (
             energy_orb
             + E_func
-            - ((V_H / 2 + V_func) * P_in).sum((-2, -1))
+            - ((V_H / 2 + V_func).squeeze() * P_in).sum((-2, -1))
             + basis.E_nuc
         )
         if tape is not None:
