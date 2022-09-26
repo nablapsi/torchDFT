@@ -144,7 +144,6 @@ class TestGgaConv1dFunctionalNet:
     system = System(
         centers=torch.tensor([0.0]),
         Z=torch.tensor([1]),
-        grid=grid.grid,
     )
 
     basis = GridBasis(system, grid)

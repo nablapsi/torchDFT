@@ -25,7 +25,6 @@ class TestKineticFunctionals:
         system = System(
             centers=torch.tensor([0]),
             Z=torch.tensor([1]),
-            grid=grid.grid,
         )
         basis = GridBasis(system, grid)
         density = Density(gaussian(grid.grid, 0, 1))

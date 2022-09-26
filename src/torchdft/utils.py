@@ -19,12 +19,10 @@ class System:
         self,
         Z: Tensor,
         centers: Tensor,
-        grid: Tensor,
         charge: int = 0,
     ):
         self.Z = Z
         self.centers = centers
-        self.grid = grid
         self.n_electrons = int(self.Z.sum() - charge)
         self.lmax = -1
 
@@ -47,7 +45,7 @@ class System:
         self.lmax = 0
         nleft = self.n_electrons
         nmax = 0
-        occ = self.grid.new_zeros([4, 7])
+        occ = self.centers.new_zeros([4, 7])
         for elem in order:
             ni, li = int(elem[0]), l[elem[1]]
             if ni > nmax:
@@ -66,9 +64,6 @@ class SystemBatch:
 
     def __init__(self, systems: List[System]):
         self.systems = systems
-        self.grid = self.systems[0].grid
-        # Make sure all systems share the same grid.
-        assert [system.grid == self.grid for system in self.systems]
         self.nbatch = len(systems)
         self.max_centers = 0
         self.n_electrons = self.systems[0].centers.new_zeros(
@@ -103,7 +98,7 @@ class SystemBatch:
         elif mode == "aufbau":
             occ_list = [system.aufbau_occ() for system in self.systems]
             occ_shapes = (torch.tensor([occ.shape for occ in occ_list]).max(0)).values
-            occ = self.grid.new_zeros(
+            occ = self.centers.new_zeros(
                 (int(occ_shapes[0]), self.nbatch, int(occ_shapes[1]))
             )
             for ibatch, occi in enumerate(occ_list):

@@ -54,7 +54,6 @@ class TestTrainScf:
                 System(
                     Z=Zi,
                     centers=centers[i],
-                    grid=grid.grid,
                 ),
                 grid,
             )
@@ -112,7 +111,6 @@ class TestTrainScf:
         system = System(
             Z=self.Z[0],
             centers=self.centers[0],
-            grid=self.grid.grid,
         )
         basis = GridBasis(system, self.grid)
         for xc_nn in self.models:
@@ -133,7 +131,6 @@ class TestTrainScf:
         system = System(
             Z=self.Z[0],
             centers=self.centers[0],
-            grid=self.grid.grid,
         )
         basis = GridBasis(system, self.grid)
         for xc_nn in self.models:

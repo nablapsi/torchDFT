@@ -21,7 +21,7 @@ def test_h2():
     Z = torch.tensor([1, 1])
     centers = torch.tensor([0.0, 1.401118437], dtype=torch.float64)
     grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
-    H2 = System(Z=Z, centers=centers, grid=grid.grid)
+    H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid)
     density, energy = solve_scf(basis, H2.occ(), Lda1d())
     assert_allclose(energy, -1.4046211)
@@ -31,7 +31,7 @@ def test_ks_of():
     Z = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
     grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
-    H2 = System(Z=Z, centers=centers, grid=grid.grid)
+    H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid)
     density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d())
     density_of, energy_of = solve_scf(basis, H2.occ(mode="OF"), Lda1d())
@@ -79,7 +79,7 @@ def test_batched_ks_iteration():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=charges, centers=centers, grid=grid.grid)
+        system = System(Z=charges, centers=centers)
         systems.append(system)
         gridbasis.append(GridBasis(system, grid))
 
@@ -87,7 +87,7 @@ def test_batched_ks_iteration():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=charges, centers=centers, grid=grid.grid)
+        system = System(Z=charges, centers=centers)
         systems.append(system)
         gridbasis.append(GridBasis(system, grid))
 
@@ -144,7 +144,7 @@ def test_batched_solve_scf():
     Z = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=Z, centers=centers, grid=grid.grid)
+        system = System(Z=Z, centers=centers)
         systems.append(system)
         gridbasis.append(GridBasis(system, grid))
 
@@ -152,7 +152,7 @@ def test_batched_solve_scf():
     Z = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=Z, centers=centers, grid=grid.grid)
+        system = System(Z=Z, centers=centers)
         systems.append(system)
         gridbasis.append(GridBasis(system, grid))
 
@@ -188,7 +188,7 @@ def test_pulaydensity_ks_of():
     Z = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
     grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
-    H2 = System(Z=Z, centers=centers, grid=grid.grid)
+    H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid)
     density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d(), mixer="pulaydensity")
     density_of, energy_of = solve_scf(
@@ -236,7 +236,7 @@ def test_Li_radialbasis():
     )
     # RadialBasis Li energy
     grid = RadialGrid(end=10, dx=1e-2)
-    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid.grid)
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]))
     basis = RadialBasis(Li, grid)
     density, energy = solve_scf(
         basis,
@@ -252,9 +252,9 @@ def test_Li_radialbasis():
 def test_batched_radialbasis():
     grid = RadialGrid(end=10, dx=1e-2)
     # Li
-    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid.grid)
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]))
     # C
-    C = System(Z=torch.tensor([6]), centers=torch.tensor([0]), grid=grid.grid)
+    C = System(Z=torch.tensor([6]), centers=torch.tensor([0]))
     batch = SystemBatch([Li, C])
     Libasis = RadialBasis(Li, grid)
     Cbasis = RadialBasis(C, grid)

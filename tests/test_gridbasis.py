@@ -144,7 +144,6 @@ class TestFunctionals:
         system = System(
             centers=torch.tensor([0]),
             Z=torch.tensor([1]),
-            grid=grid.grid,
         )
         basis = GridBasis(system, grid)
         density = gaussian(grid.grid, mean, std)
