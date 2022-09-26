@@ -16,3 +16,21 @@ class Grid(nn.Module):
     grid: Tensor
     grid_weights: Tensor
     dv: Tensor
+
+
+class Uniform1DGrid(Grid):
+    """Class to represent a 1D uniform grid."""
+
+    def __init__(
+        self,
+        end: float,
+        dx: float,
+        start: float = 0e0,
+        reflection_symmetry: bool = False,
+    ):
+        self.grid = torch.arange(start, end + dx, dx)
+        if reflection_symmetry:
+            assert start == 0e0
+            self.grid = torch.cat((-self.grid[1:].flip(-1), self.grid))
+        self.grid_weights = torch.tensor(dx)
+        self.dv = torch.tensor(1.0)
