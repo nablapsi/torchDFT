@@ -1,0 +1,18 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+import torch
+from torch import Tensor, nn
+
+
+class Grid(nn.Module):
+    """Base class representing a grid.
+    Attributes:
+        grid: Tensor holding the grid coordinates.
+        grid_weights: Tensor holding the integration weights of grid.
+        dv: Volume element. 1 for cartesian grids. 4 pi r^2 for radial grid.
+    """
+
+    grid: Tensor
+    grid_weights: Tensor
+    dv: Tensor
