@@ -4,7 +4,7 @@ import torch
 
 from torchdft.gridbasis import GridBasis
 from torchdft.nn_functionals import Conv1dFunctionalNet, GlobalFunctionalNet
-from torchdft.train_scf import SCFData, TrainingTask
+from torchdft.trainingtask import SCFData, TrainingTask
 from torchdft.utils import System, exp_coulomb
 
 
