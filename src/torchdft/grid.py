@@ -34,3 +34,16 @@ class Uniform1DGrid(Grid):
             self.grid = torch.cat((-self.grid[1:].flip(-1), self.grid))
         self.grid_weights = torch.tensor(dx)
         self.dv = torch.tensor(1.0)
+
+
+class RadialGrid(Grid):
+    """Class to represent a radial grid."""
+
+    def __init__(
+        self,
+        end: float,
+        dx: float,
+    ):
+        self.grid = torch.arange(dx, end + dx, dx)
+        self.grid_weights = torch.tensor(dx)
+        self.dv = 4 * torch.pi * self.grid**2
