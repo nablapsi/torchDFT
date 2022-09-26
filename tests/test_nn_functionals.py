@@ -2,6 +2,7 @@ import torch
 from torch.testing import assert_allclose
 
 from torchdft.density import Density
+from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import GridBasis, get_hartree_potential
 from torchdft.nn_functionals import (
     Conv1dFunctionalNet,
@@ -139,18 +140,18 @@ class TestGlobalFunctionalNet:
 
 
 class TestGgaConv1dFunctionalNet:
-    grid = torch.arange(-10.0, 10.0, 1.0)
+    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
     system = System(
         centers=torch.tensor([0.0]),
         Z=torch.tensor([1]),
-        grid=grid,
+        grid=grid.grid,
     )
 
-    basis = GridBasis(system)
+    basis = GridBasis(system, grid)
 
     def test_forward(self):
         net = GgaConv1dFunctionalNet(channels=[2, 16, 16, 1], negative_transform=True)
-        density = Density(torch.rand((3, self.grid.shape[0])))
+        density = Density(torch.rand((3, self.grid.grid.shape[0])))
         density.grad = self.basis._get_density_gradient(density.value)
 
         _ = net(density)

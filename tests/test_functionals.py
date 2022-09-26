@@ -3,6 +3,7 @@ from torch.testing import assert_allclose
 
 from torchdft.density import Density
 from torchdft.functional import ComposedFunctional
+from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.kinetic_functionals import VonWeizsaecker
 from torchdft.utils import System, gaussian
@@ -10,13 +11,15 @@ from torchdft.xc_functionals import Lda1d
 
 
 class TestComposedFunctional:
-    grid = torch.arange(-10, 10, 0.1)
-    density = Density(gaussian(grid, 0, 1))
+    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
+    density = Density(gaussian(grid.grid, 0, 1))
     # System and basis are declared in order to access basis._get_density_gradient
     # method.
-    system = System(centers=torch.tensor([0]), Z=torch.tensor([1]), grid=grid)
-    basis = GridBasis(system)
-    batched_density = Density(torch.stack([gaussian(grid, 0, 1), gaussian(grid, 1, 1)]))
+    system = System(centers=torch.tensor([0]), Z=torch.tensor([1]), grid=grid.grid)
+    basis = GridBasis(system, grid)
+    batched_density = Density(
+        torch.stack([gaussian(grid.grid, 0, 1), gaussian(grid.grid, 1, 1)])
+    )
 
     def test_composed_functional(self):
         composed_functional = ComposedFunctional(

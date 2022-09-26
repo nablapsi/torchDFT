@@ -2,6 +2,7 @@ import shutil
 
 import torch
 
+from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.nn_functionals import Conv1dFunctionalNet, GlobalFunctionalNet
 from torchdft.trainingtask import SCFData, TrainingTask
@@ -12,9 +13,9 @@ class TestTrainScf:
     Z = torch.tensor([[1, 0, 1], [1, 1, 1]])
     centers = torch.tensor([[-1, 0, 1], [1, 0, 1]])
     n_electrons = torch.tensor([[2], [3]])
-    grid = torch.arange(-10, 10, 1.0)
+    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
     E_truth = torch.rand(Z.shape[0])
-    D_truth = torch.rand((Z.shape[0], grid.shape[0]))
+    D_truth = torch.rand((Z.shape[0], grid.grid.shape[0]))
 
     models = [
         Conv1dFunctionalNet(
@@ -26,7 +27,7 @@ class TestTrainScf:
         GlobalFunctionalNet(
             channels=[4, 16, 1],
             glob_channels=4,
-            grid=grid,
+            grid=grid.grid,
             kernels=[3, 1],
             maxval=1.0,
             minval=0.0,
@@ -36,7 +37,7 @@ class TestTrainScf:
         GlobalFunctionalNet(
             channels=[4, 16, 1],
             glob_channels=4,
-            grid=grid,
+            grid=grid.grid,
             kernels=[3, 1],
             maxval=1.0,
             minval=0.0,
@@ -53,8 +54,9 @@ class TestTrainScf:
                 System(
                     Z=Zi,
                     centers=centers[i],
-                    grid=grid,
-                )
+                    grid=grid.grid,
+                ),
+                grid,
             )
         )
 
@@ -110,9 +112,9 @@ class TestTrainScf:
         system = System(
             Z=self.Z[0],
             centers=self.centers[0],
-            grid=self.grid,
+            grid=self.grid.grid,
         )
-        basis = GridBasis(system)
+        basis = GridBasis(system, self.grid)
         for xc_nn in self.models:
             task = TrainingTask(
                 xc_nn,
@@ -131,9 +133,9 @@ class TestTrainScf:
         system = System(
             Z=self.Z[0],
             centers=self.centers[0],
-            grid=self.grid,
+            grid=self.grid.grid,
         )
-        basis = GridBasis(system)
+        basis = GridBasis(system, self.grid)
         for xc_nn in self.models:
             task = TrainingTask(
                 xc_nn,

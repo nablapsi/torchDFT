@@ -1,7 +1,6 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import math
 from typing import Dict, Tuple, Union
 
 import torch
@@ -11,7 +10,8 @@ from .basis import Basis
 from .density import Density
 from .errors import NanError
 from .functional import Functional
-from .utils import System, SystemBatch, fin_diff_matrix, get_dx
+from .grid import Grid
+from .utils import System, SystemBatch, fin_diff_matrix
 
 __all__ = ["RadialBasis"]
 
@@ -22,21 +22,18 @@ class RadialBasis(Basis):
     S: Tensor
     T: Tensor
     V_ext: Tensor
-    dx: Tensor
     dv: Tensor
     grid: Tensor
+    grid_weights: Tensor
     E_nuc: Tensor
     Z: Tensor
 
-    def __init__(
-        self,
-        system: Union[System, SystemBatch],
-    ):
+    def __init__(self, system: Union[System, SystemBatch], grid: Grid):
         super().__init__()
         self.system = system
-        self.register_buffer("grid", self.system.grid)
-        self.register_buffer("dx", get_dx(self.grid))
-        self.register_buffer("dv", 4 * math.pi * self.grid ** 2 * self.dx)
+        self.register_buffer("grid", grid.grid)
+        self.register_buffer("dv", grid.dv)
+        self.register_buffer("grid_weights", grid.grid_weights)
         self.register_buffer("Z", self.system.Z.squeeze(-1))
         self.register_buffer("E_nuc", self.Z.new_zeros(self.Z.shape))
         self.register_buffer("T", -5e-1 * self.get_laplacian())
@@ -47,7 +44,8 @@ class RadialBasis(Basis):
         )
         self.register_buffer(
             "grad_operator",
-            fin_diff_matrix(self.grid.shape[0], 5, 1, dtype=self.grid.dtype) / self.dx,
+            fin_diff_matrix(self.grid.shape[0], 5, 1, dtype=self.grid.dtype)
+            / self.grid_weights,
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
@@ -58,7 +56,7 @@ class RadialBasis(Basis):
             V_ext_l = torch.stack((V_ext_l,) * (self.system.lmax + 1), dim=-3)
             for l in range(self.system.lmax + 1):
                 V_ext_l[..., l, :, :] += (
-                    l * (l + 1) / (2 * self.grid ** 2)
+                    l * (l + 1) / (2 * self.grid**2)
                 ).diag_embed()
             S = S[..., None, :, :]
             T = T[..., None, :, :]
@@ -96,7 +94,7 @@ class RadialBasis(Basis):
         eps_func = functional(density)
         if functional.per_electron:
             eps_func = eps_func * density.value
-        E_func = (eps_func * self.dv).sum(-1)
+        E_func = (eps_func * self.dv * self.grid_weights).sum(-1)
         (v_func,) = torch.autograd.grad(
             eps_func.sum(), density.value, create_graph=create_graph
         )
@@ -114,13 +112,13 @@ class RadialBasis(Basis):
         return torch.einsum("ij, ...j -> ...i", self.grad_operator, density)
 
     def density_mse(self, density: Tensor) -> Tensor:
-        return (density.pow(2) * self.dv).sum(dim=-1)
+        return (density.pow(2) * self.dv * self.grid_weights).sum(dim=-1)
 
     def density(self, P: Tensor) -> Tensor:
-        return P.diagonal(dim1=-2, dim2=-1) / self.dv
+        return P.diagonal(dim1=-2, dim2=-1) / (self.dv * self.grid_weights)
 
     def quadrupole(self, density: Tensor) -> Tensor:
-        Q_el = -(self.grid ** 2 * density * self.dv).sum(-1)
+        Q_el = -(self.grid**2 * density * self.dv * self.grid_weights).sum(-1)
         return Q_el
 
     def density_metrics_fn(
@@ -141,16 +139,18 @@ class RadialBasis(Basis):
         )
         if self.Z.size():
             laplacian = torch.stack((laplacian,) * self.Z.shape[0])
-        laplacian[..., 0, 0] += (1 + self.dx * self.Z) / (12 * (1 - self.dx * self.Z))
-        return laplacian / self.dx ** 2
+        laplacian[..., 0, 0] += (1 + self.grid_weights * self.Z) / (
+            12 * (1 - self.grid_weights * self.Z)
+        )
+        return laplacian / self.grid_weights**2
 
     def get_hartree_potential(self, density: Tensor, grid: Tensor) -> Tensor:
         """Evaluate Hartree potential."""
         # https://gitlab.com/aheld84/radialdft/-/blob/master/radialdft/poisson.py
-        ndV = density * self.dv
+        ndv = density * self.dv * self.grid_weights
         u_l = grid.new_zeros(density.shape)
         u_l[..., 0] = 0
-        u_l[..., 1:] = torch.cumsum(ndV[..., :-1], dim=-1)
+        u_l[..., 1:] = torch.cumsum(ndv[..., :-1], dim=-1)
         u_l = u_l / grid
-        u_r = torch.cumsum((ndV / grid).flip(-1), dim=-1).flip(-1)
+        u_r = torch.cumsum((ndv / grid).flip(-1), dim=-1).flip(-1)
         return u_l + u_r

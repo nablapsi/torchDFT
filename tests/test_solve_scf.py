@@ -7,19 +7,22 @@ from torch.testing import assert_allclose
 
 from torchdft.errors import SCFNotConvergedError
 from torchdft.gaussbasis import GaussianBasis
+from torchdft.grid import RadialGrid, Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.radialbasis import RadialBasis
 from torchdft.scf import ks_iteration, solve_scf
 from torchdft.utils import GeneralizedDiagonalizer, System, SystemBatch
 from torchdft.xc_functionals import PBE, Lda1d, LdaPw92
 
+torch.set_default_dtype(torch.double)
+
 
 def test_h2():
     Z = torch.tensor([1, 1])
     centers = torch.tensor([0.0, 1.401118437], dtype=torch.float64)
-    grid = torch.arange(-10, 10, 0.1, dtype=torch.float64)
-    H2 = System(Z=Z, centers=centers, grid=grid)
-    basis = GridBasis(H2)
+    grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
+    H2 = System(Z=Z, centers=centers, grid=grid.grid)
+    basis = GridBasis(H2, grid)
     density, energy = solve_scf(basis, H2.occ(), Lda1d())
     assert_allclose(energy, -1.4046211)
 
@@ -27,9 +30,9 @@ def test_h2():
 def test_ks_of():
     Z = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
-    grid = torch.arange(-10, 10, 0.1)
-    H2 = System(Z=Z, centers=centers, grid=grid)
-    basis = GridBasis(H2)
+    grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
+    H2 = System(Z=Z, centers=centers, grid=grid.grid)
+    basis = GridBasis(H2, grid)
     density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d())
     density_of, energy_of = solve_scf(basis, H2.occ(mode="OF"), Lda1d())
     assert_allclose(density_ks, density_of)
@@ -68,7 +71,7 @@ def test_batched_ks_iteration():
         center = chain.mean()
         return chain - center
 
-    grid = torch.arange(-10, 10, 0.1)
+    grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
     R_list = [1.401118437, 2.5, 4]
     systems, gridbasis = [], []
     # Genetate some H2 and H3 systems:
@@ -76,21 +79,21 @@ def test_batched_ks_iteration():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=charges, centers=centers, grid=grid)
+        system = System(Z=charges, centers=centers, grid=grid.grid)
         systems.append(system)
-        gridbasis.append(GridBasis(system))
+        gridbasis.append(GridBasis(system, grid))
 
     n = 3
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=charges, centers=centers, grid=grid)
+        system = System(Z=charges, centers=centers, grid=grid.grid)
         systems.append(system)
-        gridbasis.append(GridBasis(system))
+        gridbasis.append(GridBasis(system, grid))
 
     # Get batched system and grids.
     systembatch = SystemBatch(systems)
-    batchgrid = GridBasis(systembatch)
+    batchgrid = GridBasis(systembatch, grid)
 
     for mode in ["KS", "OF"]:
         # Make two KS iterations:
@@ -133,7 +136,7 @@ def test_batched_solve_scf():
         center = chain.mean()
         return chain - center
 
-    grid = torch.arange(-10, 10, 0.1)
+    grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
     R_list = [1.401118437, 2.5, 4]
     systems, gridbasis = [], []
     # Genetate some H2 and H3 systems:
@@ -141,21 +144,21 @@ def test_batched_solve_scf():
     Z = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=Z, centers=centers, grid=grid)
+        system = System(Z=Z, centers=centers, grid=grid.grid)
         systems.append(system)
-        gridbasis.append(GridBasis(system))
+        gridbasis.append(GridBasis(system, grid))
 
     n = 3
     Z = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=Z, centers=centers, grid=grid)
+        system = System(Z=Z, centers=centers, grid=grid.grid)
         systems.append(system)
-        gridbasis.append(GridBasis(system))
+        gridbasis.append(GridBasis(system, grid))
 
     # Get batched system and grids.
     systembatch = SystemBatch(systems)
-    batchgrid = GridBasis(systembatch)
+    batchgrid = GridBasis(systembatch, grid)
 
     for mode in ["KS", "OF"]:
         P_list, E_list = [], []
@@ -184,9 +187,9 @@ def test_batched_solve_scf():
 def test_pulaydensity_ks_of():
     Z = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
-    grid = torch.arange(-10, 10, 0.1)
-    H2 = System(Z=Z, centers=centers, grid=grid)
-    basis = GridBasis(H2)
+    grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
+    H2 = System(Z=Z, centers=centers, grid=grid.grid)
+    basis = GridBasis(H2, grid)
     density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d(), mixer="pulaydensity")
     density_of, energy_of = solve_scf(
         basis, H2.occ(mode="OF"), Lda1d(), mixer="pulaydensity"
@@ -232,9 +235,9 @@ def test_Li_radialbasis():
         basis, torch.tensor([2, 1]), LdaPw92(), mixer="pulay", density_threshold=1e-9
     )
     # RadialBasis Li energy
-    grid = torch.arange(1e-2, 10, 1e-2, dtype=torch.float64)
-    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid)
-    basis = RadialBasis(Li)
+    grid = RadialGrid(end=10, dx=1e-2)
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid.grid)
+    basis = RadialBasis(Li, grid)
     density, energy = solve_scf(
         basis,
         Li.occ("aufbau"),
@@ -247,15 +250,15 @@ def test_Li_radialbasis():
 
 
 def test_batched_radialbasis():
-    grid = torch.arange(1e-2, 10, 1e-2, dtype=torch.float64)
+    grid = RadialGrid(end=10, dx=1e-2)
     # Li
-    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid)
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid.grid)
     # C
-    C = System(Z=torch.tensor([6]), centers=torch.tensor([0]), grid=grid)
+    C = System(Z=torch.tensor([6]), centers=torch.tensor([0]), grid=grid.grid)
     batch = SystemBatch([Li, C])
-    Libasis = RadialBasis(Li)
-    Cbasis = RadialBasis(C)
-    batchedbasis = RadialBasis(batch)
+    Libasis = RadialBasis(Li, grid)
+    Cbasis = RadialBasis(C, grid)
+    batchedbasis = RadialBasis(batch, grid)
     P_Li, E_Li = solve_scf(
         Libasis,
         Li.occ("aufbau"),

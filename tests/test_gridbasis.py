@@ -2,6 +2,7 @@ import torch
 from torch.testing import assert_allclose
 
 from torchdft.density import Density
+from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import (
     GridBasis,
     get_external_potential,
@@ -139,13 +140,15 @@ class TestFunctionals:
 
     def test_get_gradient(self):
         mean, std = 0, 1
-        grid = torch.linspace(1, 5, 100, dtype=torch.double)
+        grid = Uniform1DGrid(dx=1e-1, end=20, reflection_symmetry=True)
         system = System(
             centers=torch.tensor([0]),
             Z=torch.tensor([1]),
-            grid=grid,
+            grid=grid.grid,
         )
-        basis = GridBasis(system)
-        density = gaussian(grid, mean, std)
+        basis = GridBasis(system, grid)
+        density = gaussian(grid.grid, mean, std)
         den_der = basis._get_density_gradient(density)
-        assert_allclose(den_der, -(grid - mean) / std * density, atol=1e-5, rtol=1e-4)
+        assert_allclose(
+            den_der, -(grid.grid - mean) / std * density, atol=1e-5, rtol=1e-4
+        )
