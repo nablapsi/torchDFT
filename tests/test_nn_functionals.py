@@ -155,6 +155,5 @@ class TestGgaConv1dFunctionalNet:
             self.grid.grid,
             self.grid.grid_weights,
         )
-        density.grad = self.basis._get_density_gradient(density.value)
-
+        density.grad = self.basis.get_density_gradient(density.value.diag_embed())
         _ = net(density)

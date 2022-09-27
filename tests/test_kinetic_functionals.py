@@ -21,13 +21,15 @@ class TestKineticFunctionals:
         )
 
     def test_get_vW_energy(self):
-        grid = Uniform1DGrid(dx=1e-1, end=10, reflection_symmetry=True)
+        grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
         system = System(
             centers=torch.tensor([0]),
             Z=torch.tensor([1]),
         )
         basis = GridBasis(system, grid)
         density = Density(gaussian(grid.grid, 0, 1), grid.grid, grid.grid_weights)
-        density.grad = basis._get_density_gradient(density.value)
+        density.grad = basis.get_density_gradient(
+            (density.value * basis.grid_weights).diag_embed()
+        )
 
         assert_allclose(1.0 / 8.0, (VonWeizsaecker()(density)).sum() * 0.1)

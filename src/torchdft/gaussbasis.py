@@ -122,15 +122,7 @@ class GaussianBasis(Basis):
             P = P.detach().requires_grad_()
         density = Density(self.density(P), self.grid, self.grid_weights)
         if functional.requires_grad:
-            # P + P^t is needed in order for grad w.r.t. P to be symmetric
-            density.grad = (
-                (
-                    (self.phi @ (P + P.transpose(-1, -2)))[..., None, :, :]
-                    * self.grad_phi
-                )
-                .sum(dim=-1)
-                .norm(dim=-2)
-            )
+            density.grad = self.get_density_gradient(P)
         if self.mask is not None:
             E_func = torch.empty_like(density.value)
             density_tmp = Density(
@@ -167,3 +159,11 @@ class GaussianBasis(Basis):
 
     def density_mse(self, density: Tensor) -> Tensor:
         return (density**2 * self.grid_weights).sum(dim=-1)
+
+    def get_density_gradient(self, P: Tensor) -> Tensor:
+        # P + P^t is needed in order for grad w.r.t. P to be symmetric
+        return (
+            ((self.phi @ (P + P.transpose(-1, -2)))[..., None, :, :] * self.grad_phi)
+            .sum(dim=-1)
+            .norm(dim=-2)
+        )

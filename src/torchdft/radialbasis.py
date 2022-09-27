@@ -74,7 +74,7 @@ class RadialBasis(Basis):
             P = P.detach().requires_grad_()
         density = Density(self.density(P), self.grid, self.dvdx)
         if functional.requires_grad:
-            density.grad = self._get_density_gradient(density.value)
+            density.grad = self.get_density_gradient(P)
 
         V_H = (self.get_hartree_potential(density.value, self.grid)).diag_embed()
         eps_func = functional(density)
@@ -96,8 +96,11 @@ class RadialBasis(Basis):
             V_H = V_H.detach()
         return V_H, V_func, E_func
 
-    def _get_density_gradient(self, density: Tensor) -> Tensor:
-        return torch.einsum("ij, ...j -> ...i", self.grad_operator, density)
+    def get_density_gradient(self, P: Tensor) -> Tensor:
+        density = self.density(P)
+        return torch.einsum(
+            "...ij, ...j -> ...i", self.grad_operator, density
+        ).squeeze()
 
     def density_mse(self, density: Tensor) -> Tensor:
         return (density.pow(2) * self.dv * self.grid_weights).sum(dim=-1)

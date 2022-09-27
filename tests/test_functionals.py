@@ -30,7 +30,9 @@ class TestComposedFunctional:
         assert composed_functional.requires_grad
 
         if composed_functional.requires_grad:
-            self.density.grad = self.basis._get_density_gradient(self.density.value)
+            self.density.grad = self.basis.get_density_gradient(
+                self.density.value.diag_embed()
+            )
 
         epsilon_composed = composed_functional(self.density)
         epsilon1 = Lda1d()(self.density) * self.density.value
@@ -46,7 +48,9 @@ class TestComposedFunctional:
         assert composed_functional.requires_grad
 
         if composed_functional.requires_grad:
-            self.density.grad = self.basis._get_density_gradient(self.density.value)
+            self.density.grad = self.basis.get_density_gradient(
+                self.density.value.diag_embed()
+            )
 
         epsilon_composed = composed_functional(self.density)
         epsilon1 = Lda1d()(self.density) * self.density.value
@@ -62,8 +66,8 @@ class TestComposedFunctional:
         assert composed_functional.requires_grad
 
         if composed_functional.requires_grad:
-            self.batched_density.grad = self.basis._get_density_gradient(
-                self.batched_density.value
+            self.batched_density.grad = self.basis.get_density_gradient(
+                self.batched_density.value.diag_embed()
             )
 
         epsilon_composed = composed_functional(self.batched_density)

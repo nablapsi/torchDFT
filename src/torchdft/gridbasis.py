@@ -88,7 +88,7 @@ class GridBasis(Basis):
             P = P.detach().requires_grad_()
         density = Density(self.density(P), self.grid, self.grid_weights)
         if functional.requires_grad:
-            density.grad = self._get_density_gradient(density.value)
+            density.grad = self.get_density_gradient(P)
         if self.non_interacting:
             V_H = P.new_zeros(1)
         else:
@@ -111,7 +111,8 @@ class GridBasis(Basis):
             V_H = V_H.detach()
         return V_H, V_func, E_func
 
-    def _get_density_gradient(self, density: Tensor) -> Tensor:
+    def get_density_gradient(self, P: Tensor) -> Tensor:
+        density = self.density(P)
         return torch.einsum("ij, ...j -> ...i", self.grad_operator, density)
 
     def density_mse(self, density: Tensor) -> Tensor:

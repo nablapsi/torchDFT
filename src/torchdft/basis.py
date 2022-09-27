@@ -42,3 +42,6 @@ class Basis(nn.Module, ABC):
         self, density: Tensor, density_ref: Tensor
     ) -> Dict[str, Tensor]:
         return {}
+    @abstractmethod
+    def get_density_gradient(self, P: Tensor) -> Tensor:
+        pass
