@@ -73,13 +73,6 @@ class RadialBasis(Basis):
         if not P.requires_grad:
             P = P.detach().requires_grad_()
         density = Density(self.density(P), self.grid, self.dvdx)
-        density.value = torch.where(
-            density.value <= 0.0,
-            torch.tensor(
-                1e-100, dtype=density.value.dtype, device=density.value.device
-            ),
-            density.value,
-        )
         if functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
 
