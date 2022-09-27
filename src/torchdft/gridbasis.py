@@ -150,7 +150,9 @@ class GridBasis(Basis):
 
 
 def get_hartree_potential(
-    density: Tensor, grid: Tensor, interaction_fn: Callable[[Tensor], Tensor]
+    density: Tensor,
+    grid: Tensor,
+    interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
 ) -> Tensor:
     r"""Evaluate Hartree potential.
 
