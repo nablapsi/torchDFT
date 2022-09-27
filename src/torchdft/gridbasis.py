@@ -8,6 +8,7 @@ from torch import Tensor
 
 from .basis import Basis
 from .density import Density
+from .errors import NanError
 from .functional import Functional
 from .grid import Grid
 from .utils import System, SystemBatch, exp_coulomb, fin_diff_matrix, get_dx
@@ -101,6 +102,8 @@ class GridBasis(Basis):
         (v_func,) = torch.autograd.grad(
             eps_func.sum(), density.value, create_graph=create_graph
         )
+        if torch.any(torch.isnan(v_func)):
+            raise NanError()
         V_func = v_func.diag_embed()
         return (
             V_H,
