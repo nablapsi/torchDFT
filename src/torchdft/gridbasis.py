@@ -88,12 +88,12 @@ class GridBasis(Basis):
         if functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
 
-        v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
+        V_H = get_hartree_potential(density.value, self.grid, self.interaction_fn).diag_embed()
         E_func, v_func = get_functional_energy_potential(
             density, self.grid, functional, create_graph
         )
         return (
-            v_H.diag_embed(),
+            V_H,
             v_func.diag_embed(),
             E_func,
         )
