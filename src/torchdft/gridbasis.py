@@ -47,19 +47,14 @@ class GridBasis(Basis):
             .triu(diagonal=1)
             .sum((-2, -1)),
         )
-        self.register_buffer("T", self.grid_weights * get_kinetic_matrix(self.grid))
+        self.register_buffer("T", get_kinetic_matrix(self.grid))
         self.register_buffer(
             "V_ext",
             get_external_potential(
                 self.system.Z, self.system.centers, self.grid, self.interaction_fn
             ).diag_embed(),
         )
-        self.register_buffer(
-            "S",
-            torch.full_like(
-                self.V_ext[..., 0], self.grid_weights.item(), device=self.grid.device
-            ).diag_embed(),
-        )
+        self.register_buffer("S", self.grid.new_ones(self.grid.size()).diag_embed())
         self.register_buffer(
             "grad_operator",
             fin_diff_matrix(self.grid.shape[0], 5, 1, dtype=self.grid.dtype)
@@ -67,7 +62,7 @@ class GridBasis(Basis):
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
-        return self.S, self.T, self.grid_weights * self.V_ext
+        return self.S, self.T, self.V_ext
 
     def get_int_integrals(
         self,
@@ -95,8 +90,8 @@ class GridBasis(Basis):
             density, self.grid, functional, create_graph
         )
         return (
-            self.grid_weights * v_H.diag_embed(),
-            self.grid_weights * v_func.diag_embed(),
+            v_H.diag_embed(),
+            v_func.diag_embed(),
             E_func,
         )
 
@@ -109,7 +104,7 @@ class GridBasis(Basis):
     def density(self, P: Tensor) -> Tensor:
         if self.reflection_symmetry:
             P = (P + P.flip(-1, -2)) / 2
-        return P.diagonal(dim1=-2, dim2=-1)
+        return P.diagonal(dim1=-2, dim2=-1) / self.grid_weights
 
     def quadrupole(self, density: Tensor) -> Tensor:
         Q_el = -(self.grid**2 * density).sum(-1) * self.grid_weights
