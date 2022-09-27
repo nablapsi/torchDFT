@@ -50,7 +50,7 @@ class GlobalConvolutionalLayer(nn.Module):
         super().__init__()
         self.channels = channels
         self.register_buffer(
-            "g", (grid.grid[:, None] - grid.grid).abs(), persistent=False
+            "g", (grid.grid[:, None] - grid.grid) ** 2, persistent=False
         )
         self.register_buffer("grid_weights", grid.grid_weights, persistent=False)
         self.maxval = maxval
@@ -83,7 +83,6 @@ class Conv1dPileLayers(nn.Module):
 
         assert len(kernels) + 1 == len(channels)
         self.requires_grad = False
-        self.transfer = nn.SiLU()
         self.conv = nn.Sequential()
 
         for i, (channel, kernel) in enumerate(zip(channels[:-1], kernels)):
@@ -97,10 +96,12 @@ class Conv1dPileLayers(nn.Module):
                     out_channels=channels[i + 1],
                     kernel_size=kernel,
                     padding=padding,
-                    bias=False,
                 )
             )
-            self.conv.append(self.transfer)
+            if i == len(channels) - 1:
+                self.conv.append(nn.Softplus())
+            else:
+                self.conv.append(nn.SiLU())
 
         for name, parameter in self.conv.named_parameters():
             if "weight" in name:
