@@ -8,7 +8,7 @@ from torchdft.xc_functionals import Lda1d
 class TestXcFunctionals:
     def test_get_exponential_coulomb_LDAX_energy_density(self):
         LDA = Lda1d()
-        density = Density(torch.tensor([0.0, 1e-15, 1e-10, 1.0, 5.0]))
+        density = Density(*(torch.tensor([0.0, 1e-15, 1e-10, 1.0, 5.0]),) * 3)
 
         p1 = LDA.get_exponential_coulomb_LDAX_energy_density(density)
         p2 = torch.tensor(
@@ -24,7 +24,7 @@ class TestXcFunctionals:
 
     def test_get_exponential_coulomb_LDAC_energy_density(self):
         LDA = Lda1d()
-        density = Density(torch.tensor([0.0, 1e-15, 1e-10, 1.0, 5.0]))
+        density = Density(*(torch.tensor([0.0, 1e-15, 1e-10, 1.0, 5.0]),) * 3)
 
         p1 = LDA.get_exponential_coulomb_LDAC_energy_density(density)
         p2 = torch.tensor(

@@ -13,4 +13,6 @@ class Density:
     """Density data structure."""
 
     value: Tensor
+    grid: Tensor
+    grid_weights: Tensor
     grad: Optional[Tensor] = None

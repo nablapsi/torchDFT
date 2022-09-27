@@ -94,20 +94,20 @@ class TestConv1dPileLayers:
 class TestConv1dFunctionalNet:
     def test_LDA_forward(self):
         net = Conv1dFunctionalNet(1, [1, 16, 16, 1], negative_transform=True)
-        density = Density(torch.rand((3, 10)))
+        density = Density(torch.rand((3, 10)), torch.rand(10), torch.rand(10))
 
         _ = net(density)
 
     def test_GGA_forward(self):
         net = Conv1dFunctionalNet(3, [1, 16, 16, 1], negative_transform=True)
-        density = Density(torch.rand((3, 10)))
+        density = Density(torch.rand((3, 10)), torch.rand(10), torch.rand(10))
 
         _ = net(density)
 
 
 class TestGlobalFunctionalNet:
     grid = Uniform1DGrid(end=10, dx=1e0, reflection_symmetry=True)
-    density = Density(gaussian(grid.grid, 0, 1))
+    density = Density(gaussian(grid.grid, 0, 1), grid.grid, grid.grid_weights)
 
     def test_forward(self):
         net = GlobalFunctionalNet(
@@ -150,7 +150,11 @@ class TestGgaConv1dFunctionalNet:
 
     def test_forward(self):
         net = GgaConv1dFunctionalNet(channels=[2, 16, 16, 1], negative_transform=True)
-        density = Density(torch.rand((3, self.grid.grid.shape[0])))
+        density = Density(
+            torch.rand((3, self.grid.grid.shape[0])),
+            self.grid.grid,
+            self.grid.grid_weights,
+        )
         density.grad = self.basis._get_density_gradient(density.value)
 
         _ = net(density)

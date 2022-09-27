@@ -72,7 +72,7 @@ class RadialBasis(Basis):
         """
         if not P.requires_grad:
             P = P.detach().requires_grad_()
-        density = Density(self.density(P))
+        density = Density(self.density(P), self.grid, self.dvdx)
         density.value = torch.where(
             density.value <= 0.0,
             torch.tensor(

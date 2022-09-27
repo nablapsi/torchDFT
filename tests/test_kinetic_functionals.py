@@ -13,7 +13,7 @@ from torchdft.utils import System, gaussian
 class TestKineticFunctionals:
     def test_get_TF_energy_1d(self):
         grid = torch.arange(-10, 10, 0.1)
-        density = Density(gaussian(grid, 0, 1))
+        density = Density(gaussian(grid, 0, 1), grid, grid)
 
         assert_allclose(
             1 / (2.0 * math.sqrt(math.pi)),
@@ -27,7 +27,7 @@ class TestKineticFunctionals:
             Z=torch.tensor([1]),
         )
         basis = GridBasis(system, grid)
-        density = Density(gaussian(grid.grid, 0, 1))
+        density = Density(gaussian(grid.grid, 0, 1), grid.grid, grid.grid_weights)
         density.grad = basis._get_density_gradient(density.value)
 
         assert_allclose(1.0 / 8.0, (VonWeizsaecker()(density)).sum() * 0.1)

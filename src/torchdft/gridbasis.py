@@ -86,7 +86,7 @@ class GridBasis(Basis):
         """
         if not P.requires_grad:
             P = P.detach().requires_grad_()
-        density = Density(self.density(P))
+        density = Density(self.density(P), self.grid, self.grid_weights)
         if functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
         if self.non_interacting:

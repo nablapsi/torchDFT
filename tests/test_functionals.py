@@ -12,13 +12,15 @@ from torchdft.xc_functionals import Lda1d
 
 class TestComposedFunctional:
     grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
-    density = Density(gaussian(grid.grid, 0, 1))
+    density = Density(gaussian(grid.grid, 0, 1), grid.grid, grid.grid_weights)
     # System and basis are declared in order to access basis._get_density_gradient
     # method.
     system = System(centers=torch.tensor([0]), Z=torch.tensor([1]))
     basis = GridBasis(system, grid)
     batched_density = Density(
-        torch.stack([gaussian(grid.grid, 0, 1), gaussian(grid.grid, 1, 1)])
+        torch.stack([gaussian(grid.grid, 0, 1), gaussian(grid.grid, 1, 1)]),
+        grid.grid,
+        grid.grid_weights,
     )
 
     def test_composed_functional(self):

@@ -120,7 +120,7 @@ class GaussianBasis(Basis):
         V_H = torch.einsum("...ijkl,...kl->...ij", self.eri, P)
         if not P.requires_grad:
             P = P.detach().requires_grad_()
-        density = Density(self.density(P))
+        density = Density(self.density(P), self.grid, self.grid_weights)
         if functional.requires_grad:
             # P + P^t is needed in order for grad w.r.t. P to be symmetric
             density.grad = (
@@ -135,6 +135,8 @@ class GaussianBasis(Basis):
             E_func = torch.empty_like(density.value)
             density_tmp = Density(
                 density.value[self.mask],
+                self.grid,
+                self.grid_weights,
                 density.grad[self.mask] if density.grad is not None else None,
             )
             E_func[self.mask] = functional(density_tmp)
@@ -142,6 +144,8 @@ class GaussianBasis(Basis):
                 p.detach_()
             density_tmp = Density(
                 density.value[~self.mask],
+                self.grid,
+                self.grid_weights,
                 density.grad[~self.mask] if density.grad is not None else None,
             )
             E_func[~self.mask] = functional(density_tmp)
