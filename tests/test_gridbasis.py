@@ -1,17 +1,9 @@
 import torch
 from torch.testing import assert_allclose
 
-from torchdft.density import Density
 from torchdft.grid import Uniform1DGrid
-from torchdft.gridbasis import (
-    GridBasis,
-    get_functional_energy,
-    get_functional_energy_potential,
-    get_hartree_energy,
-    get_hartree_potential,
-)
+from torchdft.gridbasis import GridBasis, get_hartree_energy, get_hartree_potential
 from torchdft.utils import System, gaussian, get_dx, soft_coulomb
-from torchdft.xc_functionals import Lda1d
 
 
 class TestFunctionals:
@@ -65,24 +57,6 @@ class TestFunctionals:
         ener = get_hartree_energy(density, grid, soft_coulomb)
         ener.backward()
         assert_allclose(pot, density.grad / dx)
-
-    def test_XC_potential_ener(self):
-        """
-        The evaluated XC potential should be equal to the functional derivative
-        of the XC energy with respect to the density.
-        """
-        LDA = Lda1d()
-        grid = torch.arange(-5, 5, 0.1)
-        dx = get_dx(grid)
-        density = Density(gaussian(grid, 1, 1))
-        density.value = density.value.detach().requires_grad_()
-
-        _, pot = get_functional_energy_potential(density, grid, LDA)
-
-        density.value = density.value.detach().requires_grad_()
-        ener = get_functional_energy(density, grid, LDA)
-        ener.backward()
-        assert_allclose(pot, density.value.grad / dx)
 
     def test_get_gradient(self):
         mean, std = 0, 1

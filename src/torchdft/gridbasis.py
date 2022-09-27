@@ -8,7 +8,6 @@ from torch import Tensor
 
 from .basis import Basis
 from .density import Density
-from .errors import NanError
 from .functional import Functional
 from .grid import Grid
 from .utils import System, SystemBatch, exp_coulomb, fin_diff_matrix, get_dx
@@ -95,12 +94,17 @@ class GridBasis(Basis):
             V_H = (
                 get_hartree_potential(density.value, self.grid, self.interaction_fn)
             ).diag_embed()
-        E_func, v_func = get_functional_energy_potential(
-            density, self.grid, functional, create_graph
+        eps_func = functional(density)
+        if functional.per_electron:
+            eps_func = eps_func * density.value
+        E_func = (eps_func * self.grid_weights).sum(-1)
+        (v_func,) = torch.autograd.grad(
+            eps_func.sum(), density.value, create_graph=create_graph
         )
+        V_func = v_func.diag_embed()
         return (
             V_H,
-            v_func.diag_embed(),
+            V_func,
             E_func,
         )
 
@@ -192,40 +196,4 @@ def get_hartree_potential(
     """
 
     dx = get_dx(grid)
-
     return (density[..., None, :] * interaction_fn(grid[:, None] - grid)).sum(-1) * dx
-
-
-def get_functional_energy(
-    density: Density, grid: Tensor, functional: Functional
-) -> Tensor:
-    """Evaluate functional energy."""
-    dx = get_dx(grid)
-    eps = functional(density)
-    if functional.per_electron:
-        eps = eps * density.value
-    return eps.sum(-1) * dx
-
-
-def get_functional_energy_potential(
-    density: Density,
-    grid: Tensor,
-    functional: Functional,
-    create_graph: bool = False,
-) -> Tuple[Tensor, Tensor]:
-    """Evaluate functional potential."""
-    density.value = torch.where(
-        density.value <= 0.0,
-        density.value.new_tensor(1e-100),
-        density.value,
-    )
-    dx = get_dx(grid)
-    E_func = get_functional_energy(density, grid, functional)
-    (v_func,) = torch.autograd.grad(
-        E_func.sum() / dx, density.value, create_graph=create_graph
-    )
-    if not create_graph:
-        E_func = E_func.detach()
-    if torch.any(torch.isnan(v_func)):
-        raise NanError()
-    return E_func, v_func
