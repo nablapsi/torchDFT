@@ -84,14 +84,14 @@ class Conv1dPileLayers(nn.Module):
         assert len(kernels) + 1 == len(channels)
         self.requires_grad = False
         self.transfer = nn.SiLU()
-        self.layers = nn.ModuleList()
+        self.conv = nn.Sequential()
 
         for i, (channel, kernel) in enumerate(zip(channels[:-1], kernels)):
             # NOTE: Only integer number kernels can be used to ensure input and
             # output dimensions are kept constant.
             assert kernel % 2 == 1
             padding = (kernel - 1) // 2
-            self.layers.append(
+            self.conv.append(
                 nn.Conv1d(
                     in_channels=channel,
                     out_channels=channels[i + 1],
@@ -100,13 +100,15 @@ class Conv1dPileLayers(nn.Module):
                     bias=False,
                 )
             )
-        for layer in self.layers:
-            torch.nn.init.kaiming_uniform_(layer.weight)
+            self.conv.append(self.transfer)
+
+        for name, parameter in self.conv.named_parameters():
+            if "weight" in name:
+                torch.nn.init.kaiming_uniform_(parameter)
         self.sign = -1 if negative_transform else 1
 
     def forward(self, x: Tensor) -> Tensor:
-        for layer in self.layers:
-            x = self.transfer(layer(x))
+        x = self.conv(x)
         return (self.sign * x).squeeze()
 
 
