@@ -16,29 +16,29 @@ from torchdft.utils import System, exp_coulomb, gaussian
 
 
 class TestSigLayer:
-    grid = torch.arange(-10, 10, 1)
-    density = gaussian(grid, 0, 1)
+    grid = Uniform1DGrid(end=10, dx=1e0, reflection_symmetry=True)
+    density = gaussian(grid.grid, 0, 1)
 
     def test_forward(self):
         layer = SigLayer(self.grid, exp_coulomb)
-        xc_energy_density = torch.rand(self.grid.shape)
+        xc_energy_density = torch.rand(self.grid.grid.shape)
 
         _ = layer(self.density, xc_energy_density)
 
     def test_1e(self):
         layer = SigLayer(self.grid, exp_coulomb)
-        xc_energy_density = torch.rand(self.grid.shape)
+        xc_energy_density = torch.rand(self.grid.grid.shape)
 
         out = layer(self.density, xc_energy_density)
-        V_H = get_hartree_potential(self.density, self.grid, exp_coulomb)
+        V_H = get_hartree_potential(self.density, self.grid.grid, exp_coulomb)
 
         assert_allclose(out.squeeze(), -5e-1 * V_H)
 
 
 class TestGlobalConvolutionalLayer:
     def test_forward(self):
-        nbatch, ngrid, nchannels = 2, 3, 4
-        grid = torch.rand(ngrid)
+        grid = Uniform1DGrid(end=10, dx=1e0, reflection_symmetry=True)
+        nbatch, ngrid, nchannels = 2, grid.grid.shape[0], 4
         density = torch.rand(nbatch, 1, ngrid)
 
         gconvlayer = GlobalConvolutionalLayer(nchannels, grid)
@@ -64,7 +64,7 @@ class TestGlobalConvolutionalLayer:
                 for k in range(ngrid):
                     for l in range(ngrid):
                         uvalue[i, j, l] += density[i, 0, k] * a[j, k, l] * xi[j]
-        uvalue *= 5e-1 * gconvlayer.dx
+        uvalue *= 5e-1 * gconvlayer.grid_weights
         uvalue = torch.cat((uvalue, density), dim=1)
 
         assert_allclose(value, uvalue)
@@ -106,8 +106,8 @@ class TestConv1dFunctionalNet:
 
 
 class TestGlobalFunctionalNet:
-    grid = torch.arange(-10, 10, 1)
-    density = Density(gaussian(grid, 0, 1))
+    grid = Uniform1DGrid(end=10, dx=1e0, reflection_symmetry=True)
+    density = Density(gaussian(grid.grid, 0, 1))
 
     def test_forward(self):
         net = GlobalFunctionalNet(

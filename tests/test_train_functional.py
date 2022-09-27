@@ -27,7 +27,7 @@ class TestTrainScf:
         GlobalFunctionalNet(
             channels=[4, 16, 1],
             glob_channels=4,
-            grid=grid.grid,
+            grid=grid,
             kernels=[3, 1],
             maxval=1.0,
             minval=0.0,
@@ -37,7 +37,7 @@ class TestTrainScf:
         GlobalFunctionalNet(
             channels=[4, 16, 1],
             glob_channels=4,
-            grid=grid.grid,
+            grid=grid,
             kernels=[3, 1],
             maxval=1.0,
             minval=0.0,

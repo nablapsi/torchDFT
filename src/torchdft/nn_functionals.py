@@ -11,6 +11,7 @@ from torch import Tensor
 
 from .density import Density
 from .functional import Functional
+from .grid import Grid
 from .gridbasis import get_hartree_potential
 from .utils import get_dx
 
@@ -18,9 +19,9 @@ from .utils import get_dx
 class SigLayer(nn.Module):
     """Self Interaction Gate (SIG) layer."""
 
-    def __init__(self, grid: Tensor, interaction_fn: Callable[[Tensor], Tensor]):
+    def __init__(self, grid: Grid, interaction_fn: Callable[[Tensor], Tensor]):
         super().__init__()
-        self.grid = grid
+        self.grid = grid.grid
         self.interaction_fn = interaction_fn
         self.dx = get_dx(self.grid)
         self.sigma = nn.Parameter(torch.Tensor(1))
@@ -41,18 +42,20 @@ class GlobalConvolutionalLayer(nn.Module):
     """Global convolutional layer."""
 
     g: Tensor
+    grid_weights: Tensor
 
     def __init__(
-        self, channels: int, grid: Tensor, minval: float = 0e0, maxval: float = 1e0
+        self, channels: int, grid: Grid, minval: float = 0e0, maxval: float = 1e0
     ):
         super().__init__()
         self.channels = channels
-        self.dx = get_dx(grid)
-        self.register_buffer("g", (grid[:, None] - grid).abs(), persistent=False)
+        self.register_buffer(
+            "g", (grid.grid[:, None] - grid.grid).abs(), persistent=False
+        )
+        self.register_buffer("grid_weights", grid.grid_weights, persistent=False)
         self.maxval = maxval
         self.minval = minval
         self.xi = nn.Parameter(torch.Tensor(self.channels - 1))
-
         nn.init.uniform_(self.xi, a=-1.0, b=1.0)
 
     def forward(self, density: Tensor) -> Tensor:
@@ -60,18 +63,13 @@ class GlobalConvolutionalLayer(nn.Module):
 
         Args:
             density: torch tensor of dimension(Nbatch, 1, grid_dim)
-            grid: torch tensor of dimension(grid_dim,)
         """
         xi = 1 / (self.minval + (self.maxval - self.minval) * torch.sigmoid(self.xi))
         expo = (
-            (-(self.g[None, :, :] * xi[:, None, None])).exp()
-            * 5e-1
-            * xi[:, None, None]
-            * self.dx
+            (-(self.g[None, :, :] * xi[:, None, None])).exp() * 5e-1 * xi[:, None, None]
         )
-        integral = torch.einsum("jkl, ilm -> jim", density, expo)
+        integral = torch.einsum("jkl, ilm -> jim", density * self.grid_weights, expo)
         integral = torch.cat((integral, density), 1)
-
         return integral
 
 
@@ -148,7 +146,7 @@ class GlobalFunctionalNet(Functional):
         self,
         channels: List[int],
         glob_channels: int,
-        grid: Tensor,
+        grid: Grid,
         kernels: List[int],
         maxval: float = 1e0,
         minval: float = 0e0,
@@ -161,7 +159,6 @@ class GlobalFunctionalNet(Functional):
         self.requires_grad = False
 
         self.channels = channels
-        self.grid = grid
         self.interaction_fn = interaction_fn
         self.kernels = kernels
         self.maxval = maxval
@@ -170,7 +167,7 @@ class GlobalFunctionalNet(Functional):
         self.sig_layer = sig_layer
 
         self.globalconv = GlobalConvolutionalLayer(
-            glob_channels, self.grid, maxval=self.maxval, minval=self.minval
+            glob_channels, grid, maxval=self.maxval, minval=self.minval
         )
         self.conv1d = Conv1dPileLayers(
             kernels=self.kernels,
@@ -179,7 +176,7 @@ class GlobalFunctionalNet(Functional):
         )
         if self.sig_layer:
             assert self.interaction_fn is not None
-            self.sig = SigLayer(self.grid, self.interaction_fn)
+            self.sig = SigLayer(grid, self.interaction_fn)
 
     def forward(self, den: Density) -> Tensor:
         if len(den.value.shape) == 2:
@@ -211,7 +208,7 @@ class GgaConv1dFunctionalNet(Functional):
 
     def forward(self, den: Density) -> Tensor:
         assert den.grad is not None
-        x = torch.stack((den.value, den.grad ** 2), dim=-2)
+        x = torch.stack((den.value, den.grad**2), dim=-2)
         if len(x.shape) == 2:
             x = x[None, :, :]
         return self.conv1d(x)
