@@ -25,9 +25,11 @@ class GridBasis(Basis):
         system: Union[System, SystemBatch],
         grid: Grid,
         interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
+        non_interacting: bool = False,
         reflection_symmetry: bool = False,
     ):
         super().__init__()
+        self.non_interacting = non_interacting
         self.reflection_symmetry = reflection_symmetry
         self.system = system
         self.interaction_fn = interaction_fn
@@ -87,8 +89,12 @@ class GridBasis(Basis):
         density = Density(self.density(P))
         if functional.requires_grad:
             density.grad = self._get_density_gradient(density.value)
-
-        V_H = get_hartree_potential(density.value, self.grid, self.interaction_fn).diag_embed()
+        if self.non_interacting:
+            V_H = P.new_zeros(1)
+        else:
+            V_H = (
+                get_hartree_potential(density.value, self.grid, self.interaction_fn)
+            ).diag_embed()
         E_func, v_func = get_functional_energy_potential(
             density, self.grid, functional, create_graph
         )
@@ -119,7 +125,6 @@ class GridBasis(Basis):
     ) -> Dict[str, Tensor]:
         Q, Q_ref = (self.quadrupole(x).detach() for x in [density, density_ref])
         return {"loss/quadrupole": ((Q - Q_ref) ** 2).mean().sqrt()}
-
 
     def get_laplacian(self) -> Tensor:
         """Finite difference approximation of Laplacian operator."""
