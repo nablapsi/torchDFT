@@ -91,14 +91,16 @@ class RadialBasis(Basis):
         (v_func,) = torch.autograd.grad(
             eps_func.sum(), density.value, create_graph=create_graph
         )
-        if not create_graph:
-            E_func = E_func.detach()
         if torch.any(torch.isnan(v_func)):
             raise NanError()
         V_func = v_func.diag_embed()
         if self.system.lmax > -1:
             V_H = V_H[..., None, :, :]
             V_func = V_func[..., None, :, :]
+        if not create_graph:
+            E_func = E_func.detach()
+            V_func = V_func.detach()
+            V_H = V_H.detach()
         return V_H, V_func, E_func
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:

@@ -153,6 +153,8 @@ class GaussianBasis(Basis):
         )
         if not create_graph:
             E_func = E_func.detach()
+            V_func = V_func.detach()
+            V_H = V_H.detach()
         return V_H, V_func, E_func
 
     def density_mse(self, density: Tensor) -> Tensor:

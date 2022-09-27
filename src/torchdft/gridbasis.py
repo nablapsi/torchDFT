@@ -105,11 +105,11 @@ class GridBasis(Basis):
         if torch.any(torch.isnan(v_func)):
             raise NanError()
         V_func = v_func.diag_embed()
-        return (
-            V_H,
-            V_func,
-            E_func,
-        )
+        if not create_graph:
+            E_func = E_func.detach()
+            V_func = V_func.detach()
+            V_H = V_H.detach()
+        return V_H, V_func, E_func
 
     def _get_density_gradient(self, density: Tensor) -> Tensor:
         return torch.einsum("ij, ...j -> ...i", self.grad_operator, density)
