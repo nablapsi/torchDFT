@@ -70,7 +70,6 @@ class TestTrainScf:
                 steps=1,
                 mixer="linear",
                 max_iterations=2,
-                enforce_symmetry=True,
             )
             task.fit("run/test", device="cpu")
         shutil.rmtree("run")
@@ -86,7 +85,6 @@ class TestTrainScf:
                 steps=1,
                 mixer="pulay",
                 max_iterations=2,
-                enforce_symmetry=True,
             )
             task.fit("run/test", device="cpu")
         shutil.rmtree("run")
@@ -102,7 +100,6 @@ class TestTrainScf:
                 steps=1,
                 mixer="pulay",
                 max_iterations=2,
-                enforce_symmetry=True,
             )
             task.fit("run/test", device="cpu", with_adam=True, loss_threshold=0.0)
         shutil.rmtree("run")
@@ -122,7 +119,6 @@ class TestTrainScf:
                 steps=1,
                 mixer="pulay",
                 max_iterations=2,
-                enforce_symmetry=True,
             )
             task.fit("run/test", device="cpu")
         shutil.rmtree("run")
@@ -142,7 +138,6 @@ class TestTrainScf:
                 steps=1,
                 mixer="pulay",
                 max_iterations=2,
-                enforce_symmetry=True,
             )
             task.fit(
                 "run/test",

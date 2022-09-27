@@ -95,7 +95,6 @@ def solve_scf(  # noqa: C901 TODO too complex
     iterations: Iterable[int] = None,
     density_threshold: float = 1e-4,
     print_iterations: Union[bool, int] = False,
-    enforce_symmetry: bool = False,
     tape: List[Tuple[Tensor, Tensor]] = None,
     create_graph: bool = False,
     use_xitorch: bool = True,
@@ -125,8 +124,6 @@ def solve_scf(  # noqa: C901 TODO too complex
         energy_prev = energy_orb + basis.E_nuc
     else:
         P_in, energy_prev = P_guess, torch.tensor([0e0])
-    if enforce_symmetry and isinstance(basis, GridBasis):
-        P_in = basis.symmetrize_P(P_in)
     print_iterations = (
         print_iterations if len(P_in.shape) == 2 or P_in.shape[0] == 1 else False
     )
@@ -147,9 +144,6 @@ def solve_scf(  # noqa: C901 TODO too complex
             use_xitorch=use_xitorch,
             extra_fock_channel=extra_fock_channel,
         )
-        # TODO duplicate, should be made part of ks_iteration()
-        if enforce_symmetry and isinstance(basis, GridBasis):
-            P_out = basis.symmetrize_P(P_out)
         energy = (
             energy_orb
             + E_func

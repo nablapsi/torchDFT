@@ -19,10 +19,10 @@ torch.set_default_dtype(torch.double)
 
 def test_h2():
     Z = torch.tensor([1, 1])
-    centers = torch.tensor([0.0, 1.401118437], dtype=torch.float64)
+    centers = torch.tensor([-0.7005592185, 0.7005592185], dtype=torch.float64)
     grid = Uniform1DGrid(end=10, dx=1e-1, reflection_symmetry=True)
     H2 = System(Z=Z, centers=centers)
-    basis = GridBasis(H2, grid)
+    basis = GridBasis(H2, grid, reflection_symmetry=True)
     density, energy = solve_scf(basis, H2.occ(), Lda1d())
     assert_allclose(energy, -1.4046211)
 

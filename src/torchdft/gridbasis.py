@@ -25,8 +25,10 @@ class GridBasis(Basis):
         system: Union[System, SystemBatch],
         grid: Grid,
         interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
+        reflection_symmetry: bool = False,
     ):
         super().__init__()
+        self.reflection_symmetry = reflection_symmetry
         self.system = system
         self.interaction_fn = interaction_fn
         self.register_buffer("grid", grid.grid)
@@ -105,10 +107,9 @@ class GridBasis(Basis):
         return density.pow(2).sum(dim=-1) * self.grid_weights
 
     def density(self, P: Tensor) -> Tensor:
+        if self.reflection_symmetry:
+            P = (P + P.flip(-1, -2)) / 2
         return P.diagonal(dim1=-2, dim2=-1)
-
-    def symmetrize_P(self, P: Tensor) -> Tensor:
-        return (P + P.flip(-1, -2)) / 2
 
     def quadrupole(self, density: Tensor) -> Tensor:
         Q_el = -(self.grid**2 * density).sum(-1) * self.grid_weights
