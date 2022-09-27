@@ -50,8 +50,11 @@ class GridBasis(Basis):
         self.register_buffer("T", get_kinetic_matrix(self.grid))
         self.register_buffer(
             "V_ext",
-            get_external_potential(
-                self.system.Z, self.system.centers, self.grid, self.interaction_fn
+            (
+                -(
+                    self.system.Z[..., None]
+                    * self.interaction_fn(self.grid - self.centers[..., None])
+                ).sum(-2)
             ).diag_embed(),
         )
         self.register_buffer("S", self.grid.new_ones(self.grid.size()).diag_embed())
@@ -192,57 +195,6 @@ def get_hartree_potential(
     dx = get_dx(grid)
 
     return (density[..., None, :] * interaction_fn(grid[:, None] - grid)).sum(-1) * dx
-
-
-def get_external_potential_energy(
-    external_potential: Tensor, density: Tensor, grid: Tensor
-) -> Tensor:
-    r"""Evaluate external potential energy.
-
-    Get external potential energy evaluated as:
-    \int v_ext(r) n(r) dr
-
-    Args:
-        external_potential: Float torch array of dimension (grid_dim,)
-          holding the external potential at each grid point.
-        density: Float torch array of dimension (grid_dim,) holding the density
-          at each spatial point.
-        grid: Float torch array of dimension (grid_dim,).
-
-    Returns:
-        Float. External potential energy.
-    """
-
-    dx = get_dx(grid)
-    return (external_potential * density).sum(-1) * dx
-
-
-def get_external_potential(
-    charges: Tensor,
-    centers: Tensor,
-    grid: Tensor,
-    interaction_fn: Callable[[Tensor], Tensor],
-) -> Tensor:
-    r"""Evaluate external potential.
-
-    Get external potential evaluated as:
-    \sum_{n=1}^N - Z_n \cdot interaction_function(r, r')
-
-    Args:
-        charges: Float torch array of dimension (ncharges,) holding the charges
-          of each nucleus.
-        centers: Float torch array of dimension (ncharges,) holding the positions
-          of each nucleus.
-        grid: Float torch array of dimension (grid_dim,).
-        interaction_fn: Function that, provided the displacements returns a float
-          torch array.
-
-    Returns:
-        Float torch array of dimension (grid_dim,) holding the external potential
-          energy at each spatial point.
-    """
-
-    return -(charges[..., None] * interaction_fn(grid - centers[..., None])).sum(-2)
 
 
 def get_functional_energy(

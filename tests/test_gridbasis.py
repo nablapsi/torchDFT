@@ -5,8 +5,6 @@ from torchdft.density import Density
 from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import (
     GridBasis,
-    get_external_potential,
-    get_external_potential_energy,
     get_functional_energy,
     get_functional_energy_potential,
     get_hartree_energy,
@@ -80,43 +78,6 @@ class TestFunctionals:
         if not density.requires_grad:
             density = density.requires_grad_()
         ener = get_hartree_energy(density, grid, soft_coulomb)
-        ener.backward()
-        assert_allclose(pot, density.grad / dx)
-
-    def test_get_external_potential(self):
-        grid = torch.arange(-5, 5, 0.1)
-
-        charges = torch.tensor([-1, 1])
-        centers = torch.tensor([0, 2])
-
-        p1 = get_external_potential(charges, centers, grid, soft_coulomb)
-
-        # Check against nested loop implementation:
-        p2 = torch.zeros(grid.size(0))
-
-        for i, r in enumerate(grid):
-            for c1, r1 in zip(charges, centers):
-                p2[i] -= c1 * soft_coulomb(r1 - r)
-
-        assert_allclose(p1, p2)
-
-    def test_external_potential_ener(self):
-        """
-        The evaluated external potential should be equal to the functional derivative
-        of the external potential energy with respect to the density.
-        """
-        grid = torch.arange(-5, 5, 0.1)
-        dx = get_dx(grid)
-        density = gaussian(grid, 1, 1)
-
-        charges = torch.tensor([-1, 1])
-        centers = torch.tensor([0, 2])
-
-        pot = get_external_potential(charges, centers, grid, soft_coulomb)
-
-        if not density.requires_grad:
-            density = density.requires_grad_()
-        ener = get_external_potential_energy(pot, density, grid)
         ener.backward()
         assert_allclose(pot, density.grad / dx)
 
