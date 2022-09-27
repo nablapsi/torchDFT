@@ -4,6 +4,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
+import torch
 from torch import Tensor, nn
 
 from .density import Density
@@ -40,3 +41,13 @@ class ComposedFunctional(Functional):
                 eps_func = eps_func * density.value
             eps = eps + eps_func
         return eps
+
+
+class NullFunctional(Functional):
+    """Null functional for non interacting calculations."""
+
+    requires_grad: bool = False
+    per_electron: bool = True
+
+    def forward(self, density: Density) -> Tensor:
+        return torch.zeros_like(density.value)
