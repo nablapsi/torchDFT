@@ -196,6 +196,7 @@ class TrainingTask(nn.Module):
         ).sqrt()
         metrics["SCF/iter"] = max(metrics["SCF/iter"])
         metrics["loss/quadrupole"] = (metrics["loss/quadrupole"] ** 2).mean().sqrt()
+        metrics["loss/density_rmse"] = (metrics["loss/density_rmse"] ** 2).mean().sqrt()
         return metrics
 
     def training_step(self) -> Metrics:

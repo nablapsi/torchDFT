@@ -119,8 +119,12 @@ class RadialBasis(Basis):
     def density_metrics_fn(
         self, density: Tensor, density_ref: Tensor
     ) -> Dict[str, Tensor]:
+        metrics = {}
+        mse = self.density_mse(density - density_ref)
         Q, Q_ref = (self.quadrupole(x).detach() for x in [density, density_ref])
-        return {"loss/quadrupole": ((Q - Q_ref) ** 2).mean().sqrt()}
+        metrics["loss/quadrupole"] = ((Q - Q_ref) ** 2).mean(dim=0).sqrt()
+        metrics["loss/density_rmse"] = (mse).mean(dim=0).sqrt().detach()
+        return metrics
 
     def get_laplacian(self) -> Tensor:
         """Finite difference approximation of Laplacian operator."""
