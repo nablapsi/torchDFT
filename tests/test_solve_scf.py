@@ -24,7 +24,7 @@ def test_h2():
     H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid, reflection_symmetry=True)
     density, energy = solve_scf(basis, H2.occ(), Lda1d())
-    assert_allclose(energy, -1.4046211)
+    assert_allclose(energy[0], -1.4046211)
 
 
 def test_ks_of():
@@ -44,11 +44,11 @@ def test_h2_gauss():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "lda,pw"
-    occ = torch.tensor([2])
+    occ = torch.tensor([[2]])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
     density, energy = solve_scf(basis, occ, LdaPw92(), mixer="pulay", use_xitorch=False)
-    assert_allclose(energy, energy_true)
+    assert_allclose(energy[0], energy_true)
 
 
 def test_h2_gauss_pbe():
@@ -56,11 +56,11 @@ def test_h2_gauss_pbe():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "pbe"
-    occ = torch.tensor([2])
+    occ = torch.tensor([[2]])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
     density, energy = solve_scf(basis, occ, PBE(), mixer="pulay")
-    assert_allclose(energy, energy_true)
+    assert_allclose(energy[0], energy_true)
 
 
 def test_batched_ks_iteration():
@@ -124,8 +124,8 @@ def test_batched_ks_iteration():
         P, E = ks_iteration(F, Sb.X, occ)
 
         for i in range(systembatch.nbatch):
-            assert_allclose(P_list[i], P[i])
-            assert_allclose(E_list[i], E[i])
+            assert_allclose(P_list[i][0], P[i])
+            assert_allclose(E_list[i][0], E[i])
 
 
 def test_batched_solve_scf():
@@ -180,8 +180,8 @@ def test_batched_solve_scf():
         except SCFNotConvergedError:
             pass
         for i in range(systembatch.nbatch):
-            assert_allclose(P_list[i], tape[-1][0][i])
-            assert_allclose(E_list[i], tape[-1][1][i])
+            assert_allclose(P_list[i][0], tape[-1][0][i])
+            assert_allclose(E_list[i][0], tape[-1][1][i])
 
 
 def test_pulaydensity_ks_of():
@@ -203,13 +203,13 @@ def test_pulaydensity_h2_gauss():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "lda,pw"
-    occ = torch.tensor([2])
+    occ = torch.tensor([[2]])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
     density, energy = solve_scf(
         basis, occ, LdaPw92(), mixer="pulaydensity", use_xitorch=False
     )
-    assert_allclose(energy, energy_true)
+    assert_allclose(energy[0], energy_true)
 
 
 def test_pulaydensity_h2_gauss_pbe():
@@ -217,14 +217,14 @@ def test_pulaydensity_h2_gauss_pbe():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "pbe"
-    occ = torch.tensor([2])
+    occ = torch.tensor([[2]])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
     mixer_kwargs = {"precondition": False, "regularization": 0}
     density, energy = solve_scf(
         basis, occ, PBE(), mixer="pulaydensity", mixer_kwargs=mixer_kwargs
     )
-    assert_allclose(energy, energy_true)
+    assert_allclose(energy[0], energy_true)
 
 
 def test_Li_radialbasis():
@@ -232,7 +232,7 @@ def test_Li_radialbasis():
     mol = gto.M(atom="Li 0 0 0", basis="cc-pv5z", verbose=3, spin=1)
     basis = GaussianBasis(mol)
     density, energy_truth = solve_scf(
-        basis, torch.tensor([2, 1]), LdaPw92(), mixer="pulay", density_threshold=1e-9
+        basis, torch.tensor([[2, 1]]), LdaPw92(), mixer="pulay", density_threshold=1e-9
     )
     # RadialBasis Li energy
     grid = RadialGrid(end=10, dx=1e-2)
@@ -284,7 +284,8 @@ def test_batched_radialbasis():
         extra_fock_channel=True,
     )
 
-    assert_allclose(E_Li, E[0])
-    assert_allclose(P_Li, P[0])
-    assert_allclose(E_C, E[1])
-    assert_allclose(P_C, P[1])
+    print(E.shape, P.shape)
+    assert_allclose(E_Li[0], E[0])
+    assert_allclose(P_Li[0], P[0])
+    assert_allclose(E_C[0], E[1])
+    assert_allclose(P_C[0], P[1])

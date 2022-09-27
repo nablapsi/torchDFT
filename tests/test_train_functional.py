@@ -6,13 +6,14 @@ from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.nn_functionals import Conv1dFunctionalNet, GlobalFunctionalNet
 from torchdft.trainingtask import SCFData, TrainingTask
-from torchdft.utils import System, exp_coulomb
+from torchdft.utils import System, SystemBatch, exp_coulomb
 
 
 class TestTrainScf:
     Z = torch.tensor([[1, 0, 1], [1, 1, 1]])
     centers = torch.tensor([[-1, 0, 1], [1, 0, 1]])
-    n_electrons = torch.tensor([[2], [3]])
+    system_list = [System(Z=Zi, centers=ci) for (Zi, ci) in zip(Z, centers)]
+    system = SystemBatch(system_list)
     grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
     E_truth = torch.rand(Z.shape[0])
     D_truth = torch.rand((Z.shape[0], grid.grid.shape[0]))
@@ -47,25 +48,15 @@ class TestTrainScf:
         ),
     ]
 
-    basislist = []
-    for i, Zi in enumerate(Z):
-        basislist.append(
-            GridBasis(
-                System(
-                    Z=Zi,
-                    centers=centers[i],
-                ),
-                grid,
-            )
-        )
+    basis = GridBasis(system, grid)
 
     def test_train_scf_linear(self):
 
         for xc_nn in self.models:
             task = TrainingTask(
                 xc_nn,
-                self.basislist,
-                self.n_electrons,
+                self.basis,
+                self.system.occ("OF"),
                 SCFData(self.E_truth, self.D_truth),
                 steps=1,
                 mixer="linear",
@@ -79,8 +70,8 @@ class TestTrainScf:
         for xc_nn in self.models:
             task = TrainingTask(
                 xc_nn,
-                self.basislist,
-                self.n_electrons,
+                self.basis,
+                self.system.occ("OF"),
                 SCFData(self.E_truth, self.D_truth),
                 steps=1,
                 mixer="pulay",
@@ -94,8 +85,8 @@ class TestTrainScf:
         for xc_nn in self.models:
             task = TrainingTask(
                 xc_nn,
-                self.basislist,
-                self.n_electrons,
+                self.basis,
+                self.system.occ("OF"),
                 SCFData(self.E_truth, self.D_truth),
                 steps=1,
                 mixer="pulay",
@@ -105,17 +96,13 @@ class TestTrainScf:
         shutil.rmtree("run")
 
     def test_train_scf_pulay_single_basis(self):
-        system = System(
-            Z=self.Z[0],
-            centers=self.centers[0],
-        )
-        basis = GridBasis(system, self.grid)
+        basis = GridBasis(self.system_list[0], self.grid)
         for xc_nn in self.models:
             task = TrainingTask(
                 xc_nn,
                 basis,
-                system.occ("KS"),
-                SCFData(self.E_truth[0], self.D_truth[0]),
+                self.system_list[0].occ("KS"),
+                SCFData(self.E_truth[0][None], self.D_truth[0][None]),
                 steps=1,
                 mixer="pulay",
                 max_iterations=2,
@@ -124,17 +111,13 @@ class TestTrainScf:
         shutil.rmtree("run")
 
     def test_train_scf_pulay_single_basis_validation(self):
-        system = System(
-            Z=self.Z[0],
-            centers=self.centers[0],
-        )
-        basis = GridBasis(system, self.grid)
+        basis = GridBasis(self.system_list[0], self.grid)
         for xc_nn in self.models:
             task = TrainingTask(
                 xc_nn,
                 basis,
-                system.occ("KS"),
-                SCFData(self.E_truth[0], self.D_truth[0]),
+                self.system_list[0].occ("KS"),
+                SCFData(self.E_truth[0][None], self.D_truth[0][None]),
                 steps=1,
                 mixer="pulay",
                 max_iterations=2,
@@ -144,8 +127,8 @@ class TestTrainScf:
                 device="cpu",
                 validation_set=(
                     basis,
-                    system.occ("KS"),
-                    SCFData(self.E_truth[0], self.D_truth[0]),
+                    self.system_list[0].occ("KS"),
+                    SCFData(self.E_truth[0][None], self.D_truth[0][None]),
                 ),
                 validation_step=1,
             )

@@ -21,8 +21,8 @@ class System:
         centers: Tensor,
         charge: int = 0,
     ):
-        self.Z = Z
-        self.centers = centers
+        self.Z = Z[None, :]
+        self.centers = centers[None, :]
         self.n_electrons = int(self.Z.sum() - charge)
         self.lmax = -1
 
@@ -37,7 +37,7 @@ class System:
             occ = self.centers.new_tensor([self.n_electrons])
         elif mode == "aufbau":
             occ = self.aufbau_occ()
-        return occ
+        return occ[None, :]
 
     def aufbau_occ(self) -> Tensor:
         order = "1s 2s 2p 3s 3p 4s 3d 4p 5s 4d 5p 6s 4f 5d 6p 7s 5f 6d 7p".split()
@@ -70,7 +70,7 @@ class SystemBatch:
             self.nbatch, dtype=torch.uint8
         )
         for i, system in enumerate(systems):
-            center_dim = system.centers.shape[0]
+            center_dim = system.centers.shape[-1]
             if center_dim > self.max_centers:
                 self.max_centers = center_dim
 
@@ -80,8 +80,8 @@ class SystemBatch:
         self.Z = self.centers.new_zeros(self.nbatch, self.max_centers)
 
         for i, system in enumerate(systems):
-            self.centers[i, : system.centers.shape[0]] = system.centers
-            self.Z[i, : system.centers.shape[0]] = system.Z
+            self.centers[i, : system.centers.shape[-1]] = system.centers[0]
+            self.Z[i, : system.centers.shape[-1]] = system.Z[0]
 
     def occ(self, mode: str = "KS") -> Tensor:
         if mode == "KS":
@@ -99,12 +99,11 @@ class SystemBatch:
             occ_list = [system.aufbau_occ() for system in self.systems]
             occ_shapes = (torch.tensor([occ.shape for occ in occ_list]).max(0)).values
             occ = self.centers.new_zeros(
-                (int(occ_shapes[0]), self.nbatch, int(occ_shapes[1]))
+                (self.nbatch, int(occ_shapes[-2]), int(occ_shapes[-1]))
             )
             for ibatch, occi in enumerate(occ_list):
-                occ[ibatch, : occi.shape[0], : occi.shape[1]] = occi
+                occ[ibatch, : occi.shape[-2], : occi.shape[-1]] = occi
             self.lmax = max([system.lmax for system in self.systems])
-            occ = occ.squeeze(0)
         return occ
 
 
