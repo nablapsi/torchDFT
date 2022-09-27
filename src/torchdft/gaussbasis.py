@@ -32,9 +32,6 @@ def _quadrupole(r: Tensor) -> Tensor:
 class GaussianBasis(Basis):
     """Gaussian basis with radial grids from PySCF."""
 
-    S: Tensor
-    T: Tensor
-    V_ext: Tensor
     phi: Tensor
     grid_coords: Tensor
     grid_weights: Tensor
@@ -159,4 +156,4 @@ class GaussianBasis(Basis):
         return V_H, V_func, E_func
 
     def density_mse(self, density: Tensor) -> Tensor:
-        return (density ** 2 * self.grid_weights).sum(dim=-1)
+        return (density**2 * self.grid_weights).sum(dim=-1)

@@ -17,12 +17,6 @@ from .utils import System, SystemBatch, exp_coulomb, fin_diff_matrix, get_dx
 class GridBasis(Basis):
     """Basis of equidistant 1D grid."""
 
-    S: Tensor
-    T: Tensor
-    V_ext: Tensor
-    grid_weights: Tensor
-    grid: Tensor
-    E_nuc: Tensor
     centers: Tensor
     Z: Tensor
 

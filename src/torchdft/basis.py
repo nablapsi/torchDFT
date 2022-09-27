@@ -13,6 +13,12 @@ class Basis(nn.Module, ABC):
     """Base class representing an abstract basis."""
 
     E_nuc: Tensor
+    grid: Tensor
+    grid_weights: Tensor
+    S: Tensor
+    T: Tensor
+    V_ext: Tensor
+    dv: Tensor
 
     @abstractmethod
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:

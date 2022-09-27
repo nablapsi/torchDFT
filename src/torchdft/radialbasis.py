@@ -19,13 +19,6 @@ __all__ = ["RadialBasis"]
 class RadialBasis(Basis):
     """Basis of equidistant 1D grid."""
 
-    S: Tensor
-    T: Tensor
-    V_ext: Tensor
-    dv: Tensor
-    grid: Tensor
-    grid_weights: Tensor
-    E_nuc: Tensor
     Z: Tensor
 
     def __init__(self, system: Union[System, SystemBatch], grid: Grid):
