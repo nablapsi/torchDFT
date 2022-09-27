@@ -142,39 +142,6 @@ class GridBasis(Basis):
         ) / self.grid_weights**2
 
 
-def get_hartree_energy(
-    density: Tensor, grid: Tensor, interaction_fn: Callable[[Tensor], Tensor]
-) -> Tensor:
-    r"""Evaluate Hartree energy.
-
-    Get Hartree energy evaluated as:
-    0.5 \int \int n(r) n(r') interaction_function(r, r') dr dr'
-
-    Args:
-        density: Float torch array of dimension (grid_dim,) holding the density
-          at each spatial point.
-        grid: Float torch array of dimension (grid_dim,).
-        interaction_fn: Function that, provided the displacements returns a float
-          torch array.
-
-    Returns:
-        Float. Hartree energy.
-    """
-
-    dx = get_dx(grid)
-
-    return (
-        5e-1
-        * (
-            density[..., None, :]
-            * density[..., None]
-            * interaction_fn(grid[:, None] - grid)
-        ).sum((-2, -1))
-        * dx
-        * dx
-    )
-
-
 def get_hartree_potential(
     density: Tensor, grid: Tensor, interaction_fn: Callable[[Tensor], Tensor]
 ) -> Tensor:
