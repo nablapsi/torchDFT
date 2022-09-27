@@ -9,27 +9,12 @@ from torchdft.gridbasis import (
     get_functional_energy_potential,
     get_hartree_energy,
     get_hartree_potential,
-    get_laplacian,
 )
 from torchdft.utils import System, gaussian, get_dx, soft_coulomb
 from torchdft.xc_functionals import Lda1d
 
 
 class TestFunctionals:
-    def test_get_laplacian(self):
-        grid_dim = 4
-        lap = get_laplacian(grid_dim)
-
-        true_lap = torch.tensor(
-            [
-                [-2.5, 4.0 / 3.0, -1.0 / 12.0, 0],
-                [4.0 / 3.0, -2.5, 4.0 / 3.0, -1.0 / 12.0],
-                [-1.0 / 12.0, 4.0 / 3.0, -2.5, 4.0 / 3.0],
-                [0, -1.0 / 12.0, 4.0 / 3.0, -2.5],
-            ]
-        )
-        assert_allclose(lap, true_lap)
-
     def test_get_hartree_energy(self):
         grid = torch.arange(-5, 5, 0.1)
         density = gaussian(grid, 1, 1)

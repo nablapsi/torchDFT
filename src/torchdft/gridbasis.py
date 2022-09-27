@@ -47,7 +47,7 @@ class GridBasis(Basis):
             .triu(diagonal=1)
             .sum((-2, -1)),
         )
-        self.register_buffer("T", get_kinetic_matrix(self.grid))
+        self.register_buffer("T", -5e-1 * self.get_laplacian())
         self.register_buffer(
             "V_ext",
             (
@@ -121,22 +121,16 @@ class GridBasis(Basis):
         return {"loss/quadrupole": ((Q - Q_ref) ** 2).mean().sqrt()}
 
 
-def get_laplacian(grid_dim: int, device: torch.device = None) -> Tensor:
-    """Finite difference approximation of Laplacian operator."""
-    return (
-        (-2.5 * torch.ones(grid_dim, device=device)).diag_embed()
-        + (4.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=1)
-        + (4.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=-1)
-        + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=2)
-        + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=-2)
-    )
-
-
-def get_kinetic_matrix(grid: Tensor) -> Tensor:
-    """Kinetic operator matrix."""
-    grid_dim = grid.size(0)
-    dx = get_dx(grid)
-    return -5e-1 * get_laplacian(grid_dim, device=grid.device) / (dx * dx)
+    def get_laplacian(self) -> Tensor:
+        """Finite difference approximation of Laplacian operator."""
+        grid_dim = self.grid.size(0)
+        return (
+            (-2.5 * self.grid.new_ones([grid_dim]).diag_embed())
+            + (4.0 / 3.0 * self.grid.new_ones([grid_dim - 1]).diag_embed(offset=1))
+            + (4.0 / 3.0 * self.grid.new_ones([grid_dim - 1]).diag_embed(offset=-1))
+            + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=2))
+            + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=-2))
+        ) / self.grid_weights**2
 
 
 def get_hartree_energy(
