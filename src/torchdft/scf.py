@@ -265,6 +265,68 @@ class RKS(SCFSolver):
         pass
 
 
+class UKS(SCFSolver):
+    """Unrestricted KS solver."""
+
+    def get_init_guess(
+        self, P_guess: Tensor = None
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        if P_guess is not None:
+            return (
+                P_guess,
+                torch.tensor(0.0),
+                torch.tensor(0.0),
+                torch.tensor(0.0),
+            )
+        else:
+            F = self.T + self.V_ext
+            F = torch.stack((F, F), 1)
+            P, orbital_energy, epsilon, C = self.ks_iteration(F, self.S_or_X, self.occ)
+            return (
+                P,
+                orbital_energy.sum(-1),
+                epsilon,
+                C,
+            )
+
+    def build_fock_matrix(
+        self, P_in: Tensor, mixer: str
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        V_H, V_func, E_func = self.basis.get_int_integrals(
+            P_in, self.functional, create_graph=self.create_graph
+        )
+        V_H = V_H.sum(1)[:, None, ...]
+        F = self.T[:, None, ...] + self.V_ext[:, None, ...] + V_H + V_func
+        if self.mixer == "pulay":
+            err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
+            F = self.diis.step(F, err)
+        return F, V_H, V_func, E_func
+
+    def get_total_energy(
+        self,
+        P_in: Tensor,
+        V_H: Tensor,
+        V_func: Tensor,
+        E_func: Tensor,
+        energy_orb: Tensor,
+    ) -> Tensor:
+        energy = (
+            energy_orb.sum(-1)
+            + E_func
+            - ((V_H / 2 + V_func).squeeze() * P_in).sum((-3, -2, -1))
+            + self.basis.E_nuc
+        )
+        return energy
+
+    def check_convergence(
+        self, P_in: Tensor, P_out: Tensor, density_threshold: float
+    ) -> Tuple[Tensor, Tensor]:
+        P_out = P_out.sum(-3)
+        P_in = P_in.sum(-3)
+        density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
+        return density_diff, density_diff < density_threshold
+
+
 class DIIS:
     """DIIS class."""
 

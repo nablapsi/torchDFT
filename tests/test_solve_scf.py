@@ -1,5 +1,5 @@
 import torch
-from pyscf import dft, gto
+from pyscf import dft, gto, scf
 from torch.testing import assert_allclose
 
 from torchdft.errors import SCFNotConvergedError
@@ -7,7 +7,7 @@ from torchdft.gaussbasis import GaussianBasis
 from torchdft.grid import RadialGrid, Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.radialbasis import RadialBasis
-from torchdft.scf import RKS
+from torchdft.scf import RKS, UKS
 from torchdft.utils import System, SystemBatch
 from torchdft.xc_functionals import PBE, Lda1d, LdaPw92
 
@@ -293,3 +293,41 @@ def test_batched_radialbasis():
     assert_allclose(sol_Li.P[0], sol.P[0])
     assert_allclose(sol_C.E[0], sol.E[1])
     assert_allclose(sol_C.P[0], sol.P[1])
+
+
+def test_UKS_gaussbasis_C():
+    mol = gto.M(atom="C 0 0 0.74", basis="cc-pvdz", verbose=3, spin=2)
+    mf = dft.UKS(mol)
+    mf.xc = "lda,pw"
+    mf.init_guess = "1e"
+    E0 = mf.kernel()
+
+    basis = GaussianBasis(mol)
+    solver = UKS(
+        basis,
+        torch.from_numpy(scf.uhf.get_occ(mf)),
+        LdaPw92(),
+    )
+    sol = solver.solve(print_iterations=1, density_threshold=1e-6, mixer="pulay")
+    assert_allclose(E0, sol.E[0])
+
+
+def test_UKS_gaussbasis_N():
+    mol = gto.M(atom="N 0 0 0.74", basis="cc-pvdz", verbose=3, spin=3)
+    mf = dft.UKS(mol)
+    mf.xc = "lda,pw"
+    mf.init_guess = "1e"
+    E0 = mf.kernel()
+
+    basis = GaussianBasis(mol)
+    solver = UKS(
+        basis,
+        torch.from_numpy(scf.uhf.get_occ(mf)),
+        LdaPw92(),
+    )
+    sol = solver.solve(
+        print_iterations=1,
+        density_threshold=1e-6,
+        mixer="pulay",
+    )
+    assert_allclose(E0, sol.E[0])
