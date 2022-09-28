@@ -147,6 +147,7 @@ class TrainingTask(nn.Module, ABC):
         validation_step: int = 0,
         with_adam: bool = False,
         loss_threshold: float = 0.0,
+        clip_grad_norm: float = None,
     ) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir)
@@ -176,6 +177,10 @@ class TrainingTask(nn.Module, ABC):
                 opt.zero_grad()
                 metrics = self.training_step()
                 assert not any(v.grad_fn for v in metrics.values())
+                if clip_grad_norm is not None:
+                    torch.nn.utils.clip_grad_norm_(
+                        self.functional.parameters(), clip_grad_norm
+                    )
                 pbar.update()
                 pbar.set_postfix(loss=f"{metrics['loss'].item():.2e}")
                 now = time.time()
