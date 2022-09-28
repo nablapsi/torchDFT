@@ -108,8 +108,8 @@ def test_batched_ks_iteration():
                 P_list.append(sol.P)
                 E_list.append(sol.E)
             except SCFNotConvergedError as e:
-                P_list.append(e.P)
-                E_list.append(e.energy)
+                P_list.append(e.sol.P)
+                E_list.append(e.sol.E)
 
         # Make two KS iterations with the batched version:
         occ = systembatch.occ(mode)
@@ -119,8 +119,8 @@ def test_batched_ks_iteration():
             P = sol.P
             E = sol.E
         except SCFNotConvergedError as e:
-            P = e.P
-            E = e.energy
+            P = e.sol.P
+            E = e.sol.E
         for i in range(systembatch.nbatch):
             assert_allclose(P_list[i][0], P[i])
             assert_allclose(E_list[i][0], E[i])

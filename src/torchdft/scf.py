@@ -107,7 +107,17 @@ class SCFSolver(ABC):
                 alpha = alpha * alpha_decay
             energy_prev = energy
         else:
-            raise SCFNotConvergedError(energy=energy, P=P_out)
+            raise SCFNotConvergedError(
+                SCFSolution(
+                    E=energy,
+                    P=P_out,
+                    niter=torch.tensor(i + 1),
+                    orbital_energy=energy_orb,
+                    epsilon=epsilon,
+                    C=C,
+                    converged=density_diff < density_threshold,
+                )
+            )
         return SCFSolution(
             E=energy,
             P=P_out,
