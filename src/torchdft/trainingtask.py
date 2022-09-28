@@ -159,6 +159,7 @@ class TrainingTask(nn.Module, ABC):
         with_adam: bool = False,
         loss_threshold: float = 0.0,
         clip_grad_norm: float = None,
+        lr: float = 1e-2,
         **validation_kwargs: Any,
     ) -> None:
         """Execute training process of the model."""
@@ -232,10 +233,10 @@ class TrainingTask(nn.Module, ABC):
             _adam_steps = 0
             if with_adam:
                 opt: torch.optim.Optimizer = torch.optim.AdamW(
-                    self.functional.parameters(), lr=1e-2
+                    self.functional.parameters(), lr=lr
                 )
                 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    opt, patience=100
+                    opt, patience=300
                 )
                 for _adam_steps in range(self.steps):
                     if isinstance(self.basis, GaussianBasis):
