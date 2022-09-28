@@ -5,6 +5,7 @@ import torch
 from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.nn_functionals import Conv1dFunctionalNet, GlobalFunctionalNet
+from torchdft.scf import RKS
 from torchdft.trainingtask import SCFData, TrainingTask
 from torchdft.utils import System, SystemBatch, exp_coulomb
 
@@ -54,6 +55,7 @@ class TestTrainScf:
 
         for xc_nn in self.models:
             task = TrainingTask(
+                RKS,
                 xc_nn,
                 self.basis,
                 self.system.occ("OF"),
@@ -69,6 +71,7 @@ class TestTrainScf:
 
         for xc_nn in self.models:
             task = TrainingTask(
+                RKS,
                 xc_nn,
                 self.basis,
                 self.system.occ("OF"),
@@ -84,6 +87,7 @@ class TestTrainScf:
 
         for xc_nn in self.models:
             task = TrainingTask(
+                RKS,
                 xc_nn,
                 self.basis,
                 self.system.occ("OF"),
@@ -99,6 +103,7 @@ class TestTrainScf:
         basis = GridBasis(self.system_list[0], self.grid)
         for xc_nn in self.models:
             task = TrainingTask(
+                RKS,
                 xc_nn,
                 basis,
                 self.system_list[0].occ("KS"),
@@ -114,6 +119,7 @@ class TestTrainScf:
         basis = GridBasis(self.system_list[0], self.grid)
         for xc_nn in self.models:
             task = TrainingTask(
+                RKS,
                 xc_nn,
                 basis,
                 self.system_list[0].occ("KS"),

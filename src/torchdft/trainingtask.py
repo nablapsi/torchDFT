@@ -18,7 +18,7 @@ from .basis import Basis
 from .errors import GradientError, SCFNotConvergedError
 from .functional import Functional
 from .gaussbasis import GaussianBasis
-from .scf import solve_scf
+from .scf import SCFSolver
 
 __all__ = ["TrainingTask"]
 
@@ -64,6 +64,7 @@ class CheckpointStore:
 class TrainingTask(nn.Module):
     """Represents a training task."""
 
+    make_solver: type[SCFSolver]
     basis: Union[Basis, nn.ModuleList]
     occ: Tensor
     data: SCFData
@@ -74,11 +75,13 @@ class TrainingTask(nn.Module):
         basis: Union[Basis, Iterable[Basis]],
         occ: Tensor,
         data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
+        make_solver: type[SCFSolver],
         steps: int = 200,
         **kwargs: Any,
     ) -> None:
         super().__init__()
         basis, occ, data, self.train_samples = self.prepare_data(basis, occ, data)
+        self.make_solver = make_solver
         self.functional = functional
         self.basis = basis
         self.register_buffer("occ", occ)
@@ -124,11 +127,9 @@ class TrainingTask(nn.Module):
     ) -> Tuple[SCFData, Metrics]:
         """Evaluate model provided a basis and orbital occupation numbers."""
         tape: List[Tuple[Tensor, Tensor]] = []
+        solver = self.make_solver(basis, occ, self.functional)
         try:
-            solve_scf(
-                basis,
-                occ,
-                self.functional,
+            solver.solve(
                 tape=tape,
                 create_graph=self.training,
                 **kwargs,
