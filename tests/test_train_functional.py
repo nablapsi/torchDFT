@@ -6,7 +6,7 @@ from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.nn_functionals import Conv1dFunctionalNet, GlobalFunctionalNet
 from torchdft.scf import RKS
-from torchdft.trainingtask import SCFData, TrainingTask
+from torchdft.trainingtask import SCFData, SCFTrainingTask
 from torchdft.utils import System, SystemBatch, exp_coulomb
 
 
@@ -54,7 +54,7 @@ class TestTrainScf:
     def test_train_scf_linear(self):
 
         for xc_nn in self.models:
-            task = TrainingTask(
+            task = SCFTrainingTask(
                 RKS,
                 xc_nn,
                 self.basis,
@@ -70,7 +70,7 @@ class TestTrainScf:
     def test_train_scf_pulay(self):
 
         for xc_nn in self.models:
-            task = TrainingTask(
+            task = SCFTrainingTask(
                 RKS,
                 xc_nn,
                 self.basis,
@@ -86,7 +86,7 @@ class TestTrainScf:
     def test_train_scf_pulay_adam(self):
 
         for xc_nn in self.models:
-            task = TrainingTask(
+            task = SCFTrainingTask(
                 RKS,
                 xc_nn,
                 self.basis,
@@ -102,7 +102,7 @@ class TestTrainScf:
     def test_train_scf_pulay_single_basis(self):
         basis = GridBasis(self.system_list[0], self.grid)
         for xc_nn in self.models:
-            task = TrainingTask(
+            task = SCFTrainingTask(
                 RKS,
                 xc_nn,
                 basis,
@@ -118,7 +118,7 @@ class TestTrainScf:
     def test_train_scf_pulay_single_basis_validation(self):
         basis = GridBasis(self.system_list[0], self.grid)
         for xc_nn in self.models:
-            task = TrainingTask(
+            task = SCFTrainingTask(
                 RKS,
                 xc_nn,
                 basis,

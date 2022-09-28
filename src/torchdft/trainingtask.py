@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import sys
 import time
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Tuple, Union
 
@@ -61,33 +62,16 @@ class CheckpointStore:
             self.chkpts.pop(0).unlink()
 
 
-class TrainingTask(nn.Module):
+class TrainingTask(nn.Module, ABC):
     """Represents a training task."""
 
     make_solver: type[SCFSolver]
     basis: Union[Basis, nn.ModuleList]
     occ: Tensor
     data: SCFData
-
-    def __init__(
-        self,
-        functional: Functional,
-        basis: Union[Basis, Iterable[Basis]],
-        occ: Tensor,
-        data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
-        make_solver: type[SCFSolver],
-        steps: int = 200,
-        **kwargs: Any,
-    ) -> None:
-        super().__init__()
-        basis, occ, data, self.train_samples = self.prepare_data(basis, occ, data)
-        self.make_solver = make_solver
-        self.functional = functional
-        self.basis = basis
-        self.register_buffer("occ", occ)
-        self.data = data
-        self.steps = steps
-        self.kwargs = kwargs
+    train_samples: int
+    functional: Functional
+    steps: int
 
     def prepare_data(
         self,
@@ -121,78 +105,24 @@ class TrainingTask(nn.Module):
             assert data.P.shape[0] == samples
         return basis, occ, data, samples
 
+    @abstractmethod
     def eval_model(
-        self, basis: Basis, occ: Tensor, **kwargs: Any
+        self, basis: Basis, occ: Tensor, data: SCFData
     ) -> Tuple[SCFData, Metrics]:
-        """Evaluate model provided a basis and orbital occupation numbers.
+        pass
 
-        For a method that computes a fixed point, the gradient of the loss with
-        respect to the net parameters is independent of the initial guess. To avoid
-        numerical issues when backpropagating throught the SCF procedure we first
-        compute the fixed point and restart the computation from a point close to
-        the actual solution. This produces much more stable gradient computation.
-
-        Ref. Deep Equilibrium Models, arXiv:1909.01377
-        """
-        solver = self.make_solver(basis, occ, self.functional)
-        try:
-            sol_guess = solver.solve(
-                create_graph=self.training,
-                **kwargs,
-            )
-            sol = solver.solve(
-                create_graph=self.training,
-                P_guess=sol_guess.P.detach()
-                + (
-                    torch.rand(sol_guess.P.shape[-1], device=sol_guess.P.device) * 1e-7
-                ).diag(),
-                **kwargs,
-            )
-            metrics = {"SCF/iter": sol_guess.niter}
-        except SCFNotConvergedError as e:
-            sol = e.sol
-            metrics = {"SCF/iter": sol.niter}
-        return SCFData(sol.E, sol.P), metrics
-
+    @abstractmethod
     def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
-        data_pred, metrics = self.eval_model(basis, occ, **self.kwargs)
-        N = occ.sum(dim=-1)
-        density_pred = basis.density(data_pred.P)
-        density_true = basis.density(data.P)
-        energy_loss_sq = ((data_pred.energy - data.energy) ** 2 / N).mean()
-        density_loss_sq = ((basis.density_mse(density_pred - density_true)) / N).mean()
-        loss_sq = energy_loss_sq + density_loss_sq
-        if self.training:
-            loss_sq.backward()
-        metrics["loss"] = loss_sq.detach().sqrt()
-        metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
-        metrics["loss/density"] = density_loss_sq.detach().sqrt()
-        metrics.update(basis.density_metrics_fn(density_pred, density_true))
-        return metrics
+        pass
 
+    @abstractmethod
     def metrics_fn(
         self,
         basis: Union[Basis, nn.ModuleList],
         occ: Tensor,
         data: SCFData,
     ) -> Metrics:
-        """Evaluate the losses on current model."""
-        if isinstance(basis, Basis):
-            return self._metrics_fn(basis, occ, data)
-        metrics = [
-            self._metrics_fn(basis, occ, SCFData(*data))
-            for basis, occ, *data in zip(basis, occ, data.energy, data.P)
-        ]
-        metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
-        metrics["loss/energy"] = (metrics["loss/energy"] ** 2).mean().sqrt()
-        metrics["loss/density"] = (metrics["loss/density"] ** 2).mean().sqrt()
-        metrics["loss"] = (
-            metrics["loss/energy"] ** 2 + metrics["loss/density"] ** 2
-        ).sqrt()
-        metrics["SCF/iter"] = max(metrics["SCF/iter"])
-        metrics["loss/quadrupole"] = (metrics["loss/quadrupole"] ** 2).mean().sqrt()
-        metrics["loss/density_rmse"] = (metrics["loss/density_rmse"] ** 2).mean().sqrt()
-        return metrics
+        pass
 
     def training_step(self) -> Metrics:
         """Execute a training step."""
@@ -200,7 +130,7 @@ class TrainingTask(nn.Module):
         metrics = self.metrics_fn(self.basis, self.occ, self.data)
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
-            p.grad = p.grad / (2.0 * self.train_samples * metrics["loss"])
+            p.grad = p.grad / (2.0 * metrics["loss"])
         assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
@@ -325,3 +255,104 @@ class TrainingTask(nn.Module):
                 if p.grad is not None
             ]
         ).norm()
+
+
+class SCFTrainingTask(TrainingTask):
+    """Represents a training task involving an SCF calculation."""
+
+    make_solver: type[SCFSolver]
+
+    def __init__(
+        self,
+        functional: Functional,
+        basis: Union[Basis, Iterable[Basis]],
+        occ: Tensor,
+        data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
+        make_solver: type[SCFSolver],
+        steps: int = 200,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__()
+        basis, occ, data, self.train_samples = self.prepare_data(basis, occ, data)
+        self.make_solver = make_solver
+        self.functional = functional
+        self.basis = basis
+        self.register_buffer("occ", occ)
+        self.data = data
+        self.steps = steps
+        self.kwargs = kwargs
+
+    def eval_model(
+        self, basis: Basis, occ: Tensor, data: SCFData = None, **kwargs: Any
+    ) -> Tuple[SCFData, Metrics]:
+        """Evaluate model provided a basis and orbital occupation numbers.
+
+        For a method that computes a fixed point, the gradient of the loss with
+        respect to the net parameters is independent of the initial guess. To avoid
+        numerical issues when backpropagating throught the SCF procedure we first
+        compute the fixed point and restart the computation from a point close to
+        the actual solution. This produces much more stable gradient computation.
+
+        Ref. Deep Equilibrium Models, arXiv:1909.01377
+        """
+        solver = self.make_solver(basis, occ, self.functional)
+        try:
+            sol_guess = solver.solve(
+                create_graph=self.training,
+                **kwargs,
+            )
+            sol = solver.solve(
+                create_graph=self.training,
+                P_guess=sol_guess.P.detach()
+                + (
+                    torch.rand(sol_guess.P.shape[-1], device=sol_guess.P.device) * 1e-7
+                ).diag(),
+                **kwargs,
+            )
+            metrics = {"SCF/iter": sol_guess.niter}
+        except SCFNotConvergedError as e:
+            sol = e.sol
+            metrics = {"SCF/iter": sol.niter}
+        return SCFData(sol.E, sol.P), metrics
+
+    def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
+        data_pred, metrics = self.eval_model(basis, occ, **self.kwargs)
+        density_pred = basis.density(data_pred.P)
+        density_true = basis.density(data.P)
+        N = occ.sum(dim=-1)
+        energy_loss_sq = ((data_pred.energy - data.energy) ** 2 / N).mean()
+        density_loss_sq = ((basis.density_mse(density_pred - density_true)) / N).mean()
+        loss_sq = energy_loss_sq + density_loss_sq
+        if self.training:
+            loss_sq.backward()
+        metrics["loss"] = loss_sq.detach().sqrt()
+        metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
+        metrics["loss/regularization"] = density_loss_sq.detach().sqrt()
+        metrics.update(basis.density_metrics_fn(density_pred, density_true))
+        return metrics
+
+    def metrics_fn(
+        self,
+        basis: Union[Basis, nn.ModuleList],
+        occ: Tensor,
+        data: SCFData,
+    ) -> Metrics:
+        """Evaluate the losses on current model."""
+        if isinstance(basis, Basis):
+            return self._metrics_fn(basis, occ, data)
+        metrics = [
+            self._metrics_fn(basis, occ, SCFData(*data))
+            for basis, occ, *data in zip(basis, occ, data.energy, data.P)
+        ]
+        metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
+        metrics["loss/energy"] = (metrics["loss/energy"] ** 2).mean().sqrt()
+        metrics["loss/regularization"] = (
+            (metrics["loss/regularization"] ** 2).mean().sqrt()
+        )
+        metrics["loss"] = (
+            metrics["loss/energy"] ** 2 + metrics["loss/density"] ** 2
+        ).sqrt()
+        metrics["SCF/iter"] = max(metrics["SCF/iter"])
+        metrics["loss/quadrupole"] = (metrics["loss/quadrupole"] ** 2).mean().sqrt()
+        metrics["loss/density_rmse"] = (metrics["loss/density_rmse"] ** 2).mean().sqrt()
+        return metrics
