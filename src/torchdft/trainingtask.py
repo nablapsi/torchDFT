@@ -125,13 +125,31 @@ class TrainingTask(nn.Module):
     def eval_model(
         self, basis: Basis, occ: Tensor, **kwargs: Any
     ) -> Tuple[SCFData, Metrics]:
-        """Evaluate model provided a basis and orbital occupation numbers."""
+        """Evaluate model provided a basis and orbital occupation numbers.
+
+        For a method that computes a fixed point, the gradient of the loss with
+        respect to the net parameters is independent of the initial guess. To avoid
+        numerical issues when backpropagating throught the SCF procedure we first
+        compute the fixed point and restart the computation from a point close to
+        the actual solution. This produces much more stable gradient computation.
+
+        Ref. Deep Equilibrium Models, arXiv:1909.01377
+        """
         tape: List[Tuple[Tensor, Tensor]] = []
         solver = self.make_solver(basis, occ, self.functional)
         try:
+            sol_guess = solver.solve(
+                tape=tape,
+                create_graph=self.training,
+                **kwargs,
+            )
             solver.solve(
                 tape=tape,
                 create_graph=self.training,
+                P_guess=sol_guess.P.detach()
+                + (
+                    torch.rand(sol_guess.P.shape[-1], device=sol_guess.P.device) * 1e-7
+                ).diag(),
                 **kwargs,
             )
         except SCFNotConvergedError:
