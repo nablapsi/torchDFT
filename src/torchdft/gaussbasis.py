@@ -106,9 +106,7 @@ class GaussianBasis(Basis):
             torch.linalg.eigvalsh(self.quadrupole(x).detach())
             for x in [density, density_ref]
         )
-        mse = self.density_mse(density - density_ref)
-        metrics["loss/quadrupole"] = ((Q - Q_ref) ** 2).mean(dim=0).sqrt()
-        metrics["loss/density_rmse"] = (mse).mean(dim=0).sqrt().detach()
+        metrics["quadrupole"] = ((Q - Q_ref) ** 2).sqrt()
         return metrics
 
     def get_int_integrals(

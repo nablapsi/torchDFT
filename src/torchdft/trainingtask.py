@@ -128,21 +128,30 @@ class TrainingTask(nn.Module, ABC):
             sol = solver.solve(P_guess=data.P, **kwargs)
         except SCFNotConvergedError as e:
             sol = e.sol
+        npred = basis.density(sol.P)
+        nref = basis.density(data.P)
         Eloss = (sol.E - data.energy).abs()
-        nloss = basis.density_mse(basis.density(sol.P - data.P))
+        nloss = basis.density_mse(npred - nref)
+        nmetrics = basis.density_metrics_fn(npred, nref)
         Eloss[sol.converged.logical_not()] = torch.nan
         nloss[sol.converged.logical_not()] = torch.nan
         metrics = {}
+        for key in nmetrics.keys():
+            nmetrics[key][sol.converged.logical_not()] = torch.nan
         if data.P.shape[0] > 1:
             for i, (ener, den) in enumerate(zip(Eloss, nloss)):
                 metrics[f"individual_validation/Eloss{i}"] = ener.detach()
                 metrics[f"individual_validation/nloss{i}"] = den.detach().sqrt()
+                for key in nmetrics.keys():
+                    metrics[f"individual_validation/{key}{i}"] = nmetrics[key][i]
         Eloss, nloss = Eloss.mean(), nloss.mean()
         loss = Eloss**2 + nloss
         metrics["validation/SCFiter"] = sol.niter
         metrics["validation/Eloss"] = Eloss
         metrics["validation/nloss"] = nloss.sqrt()
         metrics["validation/loss"] = loss.sqrt()
+        for key in nmetrics.keys():
+            metrics[f"validation/{key}"] = (nmetrics[key] ** 2).mean().sqrt()
         return loss, metrics
 
     def fit(  # noqa: C901 TODO too complex
@@ -358,5 +367,4 @@ class SCFTrainingTask(TrainingTask):
         metrics["loss"] = loss_sq.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/regularization"] = density_loss_sq.detach().sqrt()
-        metrics.update(basis.density_metrics_fn(density_pred, density_true))
         return metrics
