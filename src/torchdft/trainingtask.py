@@ -57,9 +57,9 @@ class CheckpointStore:
 
     def replace(self, state: Dict[str, Any], path: Path) -> None:
         self.chkpts.append(path)
-        torch.save(state, self.chkpts[-1])
         while len(self.chkpts) > 1:
             self.chkpts.pop(0).unlink()
+        torch.save(state, self.chkpts[-1])
 
 
 class TrainingTask(nn.Module, ABC):
