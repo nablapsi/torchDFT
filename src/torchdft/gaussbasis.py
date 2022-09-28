@@ -44,7 +44,7 @@ class GaussianBasis(Basis):
         return _bapply(lambda m: fnp(m.intor(key)), self.mol)
 
     def __init__(self, mol: Union[Mole, Iterable[Mole]], **kwargs: object):
-        mol = mol if isinstance(mol, Mole) else list(mol)
+        mol = [mol] if isinstance(mol, Mole) else list(mol)
         super().__init__()
         self.mol = [mol] if isinstance(mol, Mole) else list(mol)
         self.register_buffer("S", self._intor("int1e_ovlp"))
