@@ -169,6 +169,7 @@ class TrainingTask(nn.Module, ABC):
         writer = SummaryWriter(log_dir=workdir)
         log.info(f"Moving to device ({device})...")
         chkpt = CheckpointStore()
+        validation_chkpt = CheckpointStore()
         if validation_set is not None:
             assert validation_step
             v_basis, v_occ, v_data, v_samples = self.prepare_data(
@@ -182,10 +183,11 @@ class TrainingTask(nn.Module, ABC):
         step = 0
         last_log = 0.0
         metrics = None
+        bestv_loss = torch.inf
         with tqdm(total=self.steps, disable=None) as pbar:
 
             def closure() -> float:
-                nonlocal step, last_log, metrics
+                nonlocal step, last_log, metrics, bestv_loss
                 opt.zero_grad()
                 metrics = self.training_step()
                 assert not any(v.grad_fn for v in metrics.values())
@@ -215,6 +217,12 @@ class TrainingTask(nn.Module, ABC):
                     )
                     for key in v_metrics.keys():
                         metrics[key] = v_metrics[key]
+                    if v_loss < bestv_loss:
+                        validation_chkpt.replace(
+                            self.functional.state_dict(),
+                            workdir / "best_validation.pt",  # type: ignore
+                        )
+                        bestv_loss = v_loss.item()
                     self.train()
                 with torch.no_grad():
                     self.after_step(step, metrics, writer)
