@@ -32,12 +32,12 @@ log = logging.getLogger(__name__)
 
 class SCFData(nn.Module):
     energy: Tensor
-    density: Tensor
+    P: Tensor
 
-    def __init__(self, energy: Tensor, density: Tensor):
+    def __init__(self, energy: Tensor, P: Tensor):
         super().__init__()
         self.register_buffer("energy", energy)
-        self.register_buffer("density", density)
+        self.register_buffer("P", P)
 
 
 class TqdmStream:
@@ -96,14 +96,14 @@ class TrainingTask(nn.Module):
         data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
     ) -> Tuple[Union[Basis, nn.ModuleList], Tensor, SCFData, int]:
         if not isinstance(data, SCFData):
-            energy, density = data
+            energy, P = data
             energy = torch.as_tensor(energy)
-            data = SCFData(energy, density)
+            data = SCFData(energy, P)
         if isinstance(basis, Basis) and not basis.E_nuc.shape:  # single basis
             samples = 1
             assert len(occ.shape) == 1
             assert len(data.energy.shape) == 0
-            assert len(data.density.shape) == 1
+            assert len(data.P.shape) == 2
         else:
             if isinstance(basis, Basis):  # batched basis
                 assert len(basis.E_nuc.shape) == 1
@@ -115,10 +115,10 @@ class TrainingTask(nn.Module):
             if occ.shape[0] == 1:
                 occ = occ.expand(samples, -1)
             assert len(data.energy.shape) == 1
-            assert len(data.density.shape) == 2
+            assert len(data.P.shape) == 3
             assert occ.shape[0] == samples
             assert data.energy.shape[0] == samples
-            assert data.density.shape[0] == samples
+            assert data.P.shape[0] == samples
         return basis, occ, data, samples
 
     def eval_model(
@@ -152,24 +152,22 @@ class TrainingTask(nn.Module):
         except SCFNotConvergedError as e:
             sol = e.sol
             metrics = {"SCF/iter": sol.niter}
-        E_pred = sol.E
-        n_pred = basis.density(sol.P)
-        return SCFData(E_pred, n_pred), metrics
+        return SCFData(sol.E, sol.P), metrics
 
     def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
         data_pred, metrics = self.eval_model(basis, occ, **self.kwargs)
         N = occ.sum(dim=-1)
+        density_pred = basis.density(data_pred.P)
+        density_true = basis.density(data.P)
         energy_loss_sq = ((data_pred.energy - data.energy) ** 2 / N).mean()
-        density_loss_sq = (
-            (basis.density_mse(data_pred.density - data.density)) / N
-        ).mean()
+        density_loss_sq = ((basis.density_mse(density_pred - density_true)) / N).mean()
         loss_sq = energy_loss_sq + density_loss_sq
         if self.training:
             loss_sq.backward()
         metrics["loss"] = loss_sq.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/density"] = density_loss_sq.detach().sqrt()
-        metrics.update(basis.density_metrics_fn(data_pred.density, data.density))
+        metrics.update(basis.density_metrics_fn(density_pred, density_true))
         return metrics
 
     def metrics_fn(
@@ -183,7 +181,7 @@ class TrainingTask(nn.Module):
             return self._metrics_fn(basis, occ, data)
         metrics = [
             self._metrics_fn(basis, occ, SCFData(*data))
-            for basis, occ, *data in zip(basis, occ, data.energy, data.density)
+            for basis, occ, *data in zip(basis, occ, data.energy, data.P)
         ]
         metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
         metrics["loss/energy"] = (metrics["loss/energy"] ** 2).mean().sqrt()

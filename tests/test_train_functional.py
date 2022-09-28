@@ -17,7 +17,7 @@ class TestTrainScf:
     system = SystemBatch(system_list)
     grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
     E_truth = torch.rand(Z.shape[0])
-    D_truth = torch.rand((Z.shape[0], grid.grid.shape[0]))
+    D_truth = torch.rand((Z.shape[0], grid.grid.shape[0], grid.grid.shape[0]))
 
     models = [
         Conv1dFunctionalNet(
