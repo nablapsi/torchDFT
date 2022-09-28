@@ -436,8 +436,8 @@ class DIIS:
     def __init__(
         self,
         max_history: int = 10,
-        precondition: bool = True,
-        regularization: float = 1e-4,
+        precondition: bool = False,
+        regularization: float = 0e0,
     ) -> None:
         assert not (regularization and not precondition)
         self.max_history = max_history
