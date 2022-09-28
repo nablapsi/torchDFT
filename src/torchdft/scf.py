@@ -13,8 +13,7 @@ from torch import Tensor
 from .basis import Basis
 from .errors import SCFNotConvergedError
 from .functional import Functional
-from .gridbasis import GridBasis
-from .utils import GeneralizedDiagonalizer, orthogonalizer
+from .utils import GeneralizedDiagonalizer
 
 DEFAULT_MIXER = "linear"
 
@@ -101,7 +100,7 @@ class SCFSolver(ABC):
             if self.mixer == "pulay":
                 P_in = P_out
             elif self.mixer == "pulaydensity":
-                P_in = self.diis.step(P_in, (P_out - P_in), alpha)
+                P_in = self.diis.step(P_in, (P_out - P_in).flatten(1), alpha)
             elif self.mixer == "linear":
                 P_in = P_in + alpha * (P_out - P_in)
                 alpha = alpha * alpha_decay
@@ -225,7 +224,7 @@ class RKS(SCFSolver):
         )
         F = self.T + self.V_ext + V_H + V_func
         if self.mixer == "pulay":
-            err = F @ P_in @ self.S - self.S @ P_in @ F
+            err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
             F = self.diis.step(F, err)
         return F, V_H, V_func, E_func
 
@@ -267,6 +266,8 @@ class RKS(SCFSolver):
 
 
 class DIIS:
+    """DIIS class."""
+
     def __init__(
         self,
         max_history: int = 10,
@@ -285,10 +286,10 @@ class DIIS:
         nb, N = X.shape[:-2], len(self.history)
         if N == 1:
             return X.new_ones((*nb, 1))
-        err = torch.stack([e for _, e in self.history], dim=-3)
-        derr = err.diff(dim=-3)
-        B = torch.einsum("...imn,...jmn->...ij", derr, derr)
-        y = -torch.einsum("...imn,...mn->...i", derr, err[..., -1, :, :])
+        err = torch.stack([e for _, e in self.history], dim=-2)
+        derr = err.diff(dim=-2)
+        B = torch.einsum("...im,...jm->...ij", derr, derr)
+        y = -torch.einsum("...im,...m->...i", derr, err[..., -1, :])
         if self.precondition:
             pre = 1 / B.detach().diagonal(dim1=-1, dim2=-2).sqrt()
         else:
@@ -304,6 +305,6 @@ class DIIS:
         X = torch.stack([X for X, _ in self.history], dim=-1)
         err = torch.stack([e for _, e in self.history], dim=-1)
         if alpha is not None:
-            X = X + alpha * err
+            X = X + alpha * err.view(X.shape)
         X = (c[..., None, None, :] * X).sum(dim=-1)
         return X
