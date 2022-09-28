@@ -34,11 +34,11 @@ class ComposedFunctional(Functional):
         self.per_electron = all([functional.per_electron for functional in functionals])
 
     def forward(self, density: Density) -> Tensor:
-        eps = density.value.new_zeros(density.value.shape)
+        eps = density.value.new_zeros(density.density.shape)
         for factor, functional in zip(self.factors, self.functionals):
             eps_func = factor * functional(density)
             if not self.per_electron and functional.per_electron:
-                eps_func = eps_func * density.value
+                eps_func = eps_func * density.density
             eps = eps + eps_func
         return eps
 

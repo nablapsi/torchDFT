@@ -97,7 +97,7 @@ class GridBasis(Basis):
             ).diag_embed()
         eps_func = functional(density)
         if functional.per_electron:
-            eps_func = eps_func * density.value
+            eps_func = eps_func * density.density
         E_func = (eps_func * self.grid_weights).sum(-1)
         (v_func,) = torch.autograd.grad(
             eps_func.sum(), density.value, create_graph=create_graph

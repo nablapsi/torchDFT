@@ -72,14 +72,14 @@ class RadialBasis(Basis):
         """
         if not P.requires_grad:
             P = P.detach().requires_grad_()
-        density = Density(self.density(P), self.grid, self.dvdx)
+        density = Density(self.density(P), self.grid, self.dv * self.grid_weights)
         if functional.requires_grad:
             density.grad = self.get_density_gradient(P)
 
         V_H = (self.get_hartree_potential(density.value, self.grid)).diag_embed()
         eps_func = functional(density)
         if functional.per_electron:
-            eps_func = eps_func * density.value
+            eps_func = eps_func * density.density
         E_func = (eps_func * self.dv * self.grid_weights).sum(-1)
         (v_func,) = torch.autograd.grad(
             eps_func.sum(), density.value, create_graph=create_graph
