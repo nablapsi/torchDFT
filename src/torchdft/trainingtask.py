@@ -135,16 +135,13 @@ class TrainingTask(nn.Module):
 
         Ref. Deep Equilibrium Models, arXiv:1909.01377
         """
-        tape: List[Tuple[Tensor, Tensor]] = []
         solver = self.make_solver(basis, occ, self.functional)
         try:
             sol_guess = solver.solve(
-                tape=tape,
                 create_graph=self.training,
                 **kwargs,
             )
-            solver.solve(
-                tape=tape,
+            sol = solver.solve(
                 create_graph=self.training,
                 P_guess=sol_guess.P.detach()
                 + (
@@ -152,12 +149,12 @@ class TrainingTask(nn.Module):
                 ).diag(),
                 **kwargs,
             )
-        except SCFNotConvergedError:
-            pass
-        metrics = {"SCF/iter": torch.tensor(len(tape))}
-        n_pred, E_pred = list(zip(*tape))
-        E_pred = torch.stack(E_pred)
-        n_pred = basis.density(torch.stack(n_pred))
+            metrics = {"SCF/iter": sol_guess.niter}
+        except SCFNotConvergedError as e:
+            sol = e.sol
+            metrics = {"SCF/iter": sol.niter}
+        E_pred = sol.E
+        n_pred = basis.density(sol.P)
         return SCFData(E_pred, n_pred), metrics
 
     def hook(
@@ -177,9 +174,9 @@ class TrainingTask(nn.Module):
         for kwargs in kwargs_list:
             data_pred, metrics = self.eval_model(basis, occ, **kwargs)
             N = occ.sum(dim=-1)
-            energy_loss_sq = ((data_pred.energy[-1] - data.energy) ** 2 / N).mean()
+            energy_loss_sq = ((data_pred.energy - data.energy) ** 2 / N).mean()
             density_loss_sq = (
-                (basis.density_mse(data_pred.density[-1] - data.density)) / N
+                (basis.density_mse(data_pred.density - data.density)) / N
             ).mean()
             loss_sq = energy_loss_sq + density_loss_sq
             if self.training:
