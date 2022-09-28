@@ -20,7 +20,7 @@ def test_h2():
     grid = Uniform1DGrid(start=-10, end=10, dx=0.1)
     H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid, reflection_symmetry=True)
-    solver = RKS(basis, H2.occ("KS"), Lda1d())
+    solver = RKS(basis, H2.occ("KS, RKS"), Lda1d())
     sol = solver.solve()
     assert_allclose(sol.E[0], -1.4045913)
 
@@ -31,9 +31,9 @@ def test_ks_of():
     grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
     H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid, reflection_symmetry=True)
-    solver = RKS(basis, H2.occ("KS"), Lda1d())
+    solver = RKS(basis, H2.occ("KS, RKS"), Lda1d())
     sol_ks = solver.solve()
-    solver = RKS(basis, H2.occ("OF"), Lda1d())
+    solver = RKS(basis, H2.occ("OF, RKS"), Lda1d())
     sol_of = solver.solve()
     assert_allclose(sol_ks.P, sol_of.P)
     assert_allclose(sol_ks.E, sol_of.E)
@@ -97,7 +97,7 @@ def test_batched_ks_iteration():
     systembatch = SystemBatch(systems)
     batchgrid = GridBasis(systembatch, grid)
 
-    for mode in ["KS", "OF"]:
+    for mode in ["KS,RKS", "OF,RKS"]:
         # Make two KS iterations:
         P_list, E_list = [], []
         for i, basis in enumerate(gridbasis):
@@ -132,9 +132,9 @@ def test_pulaydensity_ks_of():
     grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
     H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid)
-    solver = RKS(basis, H2.occ("KS"), Lda1d())
+    solver = RKS(basis, H2.occ("KS,RKS"), Lda1d())
     sol_ks = solver.solve(mixer="pulaydensity")
-    solver = RKS(basis, H2.occ("OF"), Lda1d())
+    solver = RKS(basis, H2.occ("OF,RKS"), Lda1d())
     sol_of = solver.solve(mixer="pulaydensity")
     assert_allclose(sol_ks.P, sol_of.P)
     assert_allclose(sol_ks.E, sol_of.E)
@@ -146,9 +146,9 @@ def test_pulaydensity_ks_of_noxitorch():
     grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
     H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid)
-    solver = RKS(basis, H2.occ("KS"), Lda1d())
+    solver = RKS(basis, H2.occ("KS,RKS"), Lda1d())
     sol_ks = solver.solve(use_xitorch=False, mixer="pulaydensity")
-    solver = RKS(basis, H2.occ("OF"), Lda1d())
+    solver = RKS(basis, H2.occ("OF,RKS"), Lda1d())
     sol_of = solver.solve(use_xitorch=False, mixer="pulaydensity")
     assert_allclose(sol_ks.P, sol_of.P)
     assert_allclose(sol_ks.E, sol_of.E)
@@ -233,11 +233,11 @@ def test_Li_radialbasis():
 
     # RadialBasis Li energy
     grid = RadialGrid(end=10, dx=1e-2)
-    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]))
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), spin=1)
     basis = RadialBasis(Li, grid)
     solver = RKS(
         basis,
-        Li.occ("aufbau"),
+        Li.occ("aufbau,RKS"),
         LdaPw92(),
     )
     sol = solver.solve(
@@ -251,7 +251,7 @@ def test_Li_radialbasis():
 def test_batched_radialbasis():
     grid = RadialGrid(end=10.0, dx=1e0)
     # Li
-    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]))
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), spin=1)
     # C
     C = System(Z=torch.tensor([6]), centers=torch.tensor([0]))
     batch = SystemBatch([Li, C])
@@ -260,7 +260,7 @@ def test_batched_radialbasis():
     batchedbasis = RadialBasis(batch, grid)
     solver = RKS(
         Libasis,
-        Li.occ("aufbau"),
+        Li.occ("aufbau,RKS"),
         functional=LdaPw92(),
     )
     sol_Li = solver.solve(
@@ -270,7 +270,7 @@ def test_batched_radialbasis():
     )
     solver = RKS(
         Cbasis,
-        C.occ("aufbau"),
+        C.occ("aufbau,RKS"),
         functional=LdaPw92(),
     )
     sol_C = solver.solve(
@@ -280,7 +280,7 @@ def test_batched_radialbasis():
     )
     solver = RKS(
         batchedbasis,
-        batch.occ("aufbau"),
+        batch.occ("aufbau,RKS"),
         functional=LdaPw92(),
     )
     sol = solver.solve(

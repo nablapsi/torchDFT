@@ -15,48 +15,61 @@ from torchdft import constants
 class System:
     """Represents an electronic system."""
 
-    def __init__(
-        self,
-        Z: Tensor,
-        centers: Tensor,
-        charge: int = 0,
-    ):
+    def __init__(self, Z: Tensor, centers: Tensor, charge: int = 0, spin: int = None):
         self.Z = Z[None, :]
         self.centers = centers[None, :]
         self.n_electrons = int(self.Z.sum() - charge)
         self.lmax = -1
+        self.spin = 0 if spin is None else spin  # 2S
+        assert self.Z.shape == self.centers.shape
+        if self.n_electrons // 2 != 0:
+            assert self.spin is not None
 
-    def occ(self, mode: str = "KS") -> Tensor:
+    def occ(self, mode_spin: str = "KS, RKS") -> Tensor:
+        mode = mode_spin.split(",")[0].strip()
+        spin_treat = mode_spin.split(",")[1].strip()
+        nalpha = (self.n_electrons + self.spin) // 2
+        nbeta = nalpha - self.spin
         if mode == "KS":
             self.lmax = -1
-            n_occ = self.n_electrons // 2 + self.n_electrons % 2
-            occ = self.centers.new_ones([n_occ])
-            occ[: self.n_electrons // 2] += 1
+            occ_a = self.centers.new_ones([nalpha])
+            occ_b = self.centers.new_zeros([nalpha])
+            occ_b[:nbeta] = 1
+            occ = torch.stack((occ_a, occ_b))
         elif mode == "OF":
             self.lmax = -1
-            occ = self.centers.new_tensor([self.n_electrons])
+            occ_a = self.centers.new_tensor([nalpha])
+            occ_b = self.centers.new_tensor([nbeta])
+            occ = torch.stack((occ_a, occ_b))
         elif mode == "aufbau":
             occ = self.aufbau_occ()
+        if spin_treat == "RKS":
+            occ = occ[0] + occ[1]
         return occ[None, :]
 
     def aufbau_occ(self) -> Tensor:
         order = "1s 2s 2p 3s 3p 4s 3d 4p 5s 4d 5p 6s 4f 5d 6p 7s 5f 6d 7p".split()
         l = {"s": 0, "p": 1, "d": 2, "f": 3}
         self.lmax = 0
-        nleft = self.n_electrons
         nmax = 0
-        occ = self.centers.new_zeros([4, 7])
+        nalpha = (self.n_electrons + self.spin) // 2
+        nbeta = nalpha - self.spin
+        assert nalpha + nbeta == self.n_electrons
+        occ = self.centers.new_zeros([2, 4, 7], dtype=torch.int64)
+        nleft = torch.tensor([nalpha, nbeta], dtype=torch.int64)
         for elem in order:
             ni, li = int(elem[0]), l[elem[1]]
             if ni > nmax:
                 nmax = ni
             if li > self.lmax:
                 self.lmax = li
-            occ[li, ni - li - 1] = min(nleft, 2 * (2 * li + 1))
-            nleft -= occ[li, ni - li - 1]
-            if nleft == 0:
+            occ[:, li, ni - li - 1] = torch.where(
+                nleft < (2 * li + 1), nleft, 2 * li + 1
+            )
+            nleft -= occ[:, li, ni - li - 1]
+            if all(nleft == 0):
                 break
-        return occ[: self.lmax + 1, :nmax]
+        return occ[..., : self.lmax + 1, :nmax]
 
 
 class SystemBatch:
@@ -69,12 +82,14 @@ class SystemBatch:
         self.n_electrons = self.systems[0].centers.new_zeros(
             self.nbatch, dtype=torch.uint8
         )
+        self.spin = self.systems[0].centers.new_zeros(self.nbatch, dtype=torch.uint8)
         for i, system in enumerate(systems):
             center_dim = system.centers.shape[-1]
             if center_dim > self.max_centers:
                 self.max_centers = center_dim
 
             self.n_electrons[i] = system.n_electrons
+            self.spin[i] = system.spin
 
         self.centers = self.systems[0].centers.new_zeros(self.nbatch, self.max_centers)
         self.Z = self.centers.new_zeros(self.nbatch, self.max_centers)
@@ -83,27 +98,34 @@ class SystemBatch:
             self.centers[i, : system.centers.shape[-1]] = system.centers[0]
             self.Z[i, : system.centers.shape[-1]] = system.Z[0]
 
-    def occ(self, mode: str = "KS") -> Tensor:
+    def occ(self, mode_spin: str = "KS, RKS") -> Tensor:
+        mode = mode_spin.split(",")[0].strip()
+        spin_treat = mode_spin.split(",")[1].strip()
+        nalpha = (self.n_electrons + self.spin) // 2
+        nbeta = nalpha - self.spin
         if mode == "KS":
             self.lmax = -1
-            double_occ = self.n_electrons.div(2, rounding_mode="floor")
-            n_occ = double_occ + self.n_electrons % 2
-            occ = self.n_electrons.new_zeros(self.nbatch, int(n_occ.max()))
+            occ = self.n_electrons.new_zeros(self.nbatch, 2, int(nalpha.max()))
             for i in range(self.nbatch):
-                occ[i, : int(n_occ[i])] = 1
-                occ[i, : int(double_occ[i])] += 1
+                occ[i, 0, : int(nalpha[i])] = 1
+                occ[i, 1, : int(nbeta[i])] = 1
         elif mode == "OF":
             self.lmax = -1
-            occ = self.n_electrons[:, None]
+            occ_a = nalpha[:, None]
+            occ_b = nbeta[:, None]
+            occ = torch.stack((occ_a, occ_b), dim=-2)
         elif mode == "aufbau":
             occ_list = [system.aufbau_occ() for system in self.systems]
             occ_shapes = (torch.tensor([occ.shape for occ in occ_list]).max(0)).values
-            occ = self.centers.new_zeros(
-                (self.nbatch, int(occ_shapes[-2]), int(occ_shapes[-1]))
+            occ = self.systems[0].centers.new_zeros(
+                (self.nbatch, 2, int(occ_shapes[-2]), int(occ_shapes[-1]))
             )
             for ibatch, occi in enumerate(occ_list):
-                occ[ibatch, : occi.shape[-2], : occi.shape[-1]] = occi
+                occ[ibatch, :, : occi.shape[-2], : occi.shape[-1]] = occi
             self.lmax = max([system.lmax for system in self.systems])
+            occ = (occ.squeeze(-3)).squeeze(0)
+        if spin_treat == "RKS":
+            occ = occ[:, 0, :] + occ[:, 1, :]
         return occ
 
 
