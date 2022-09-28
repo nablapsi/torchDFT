@@ -327,6 +327,109 @@ class UKS(SCFSolver):
         return density_diff, density_diff < density_threshold
 
 
+class ROKS(SCFSolver):
+    """Restricted open KS solver."""
+
+    def get_init_guess(
+        self, P_guess: Tensor = None
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        if P_guess is not None:
+            return (
+                P_guess,
+                torch.tensor(0.0),
+                torch.tensor(0.0),
+                torch.tensor(0.0),
+            )
+        else:
+            P_guess, orbital_energy, epsilon, C = self.ks_iteration(
+                self.T + self.V_ext, self.S_or_X, self.occ
+            )
+            return (
+                P_guess,
+                orbital_energy.sum(-1),
+                epsilon,
+                C,
+            )
+
+    def build_fock_matrix(
+        self, P_in: Tensor, mixer: str
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        """
+        Build the ROKS Fock matrix.
+
+        Ref: J. Phys. Chem. A, Vol. 114, No. 33, 2010.
+        ROHF Fock matrix can be expressed, as a function of alpha and beta
+        fock matrices:
+                |     closed            open        virtual
+        --------|--------------------------------------------------
+        closed  | Acc Fa + Bcc Fb        Fb         (Fa + Fb)/2
+        open    |        Fb       Aoo Fa + Boo Fb        Fa
+        virtual |   (Fa + Fb)/2          Fa       Avv Fa + Bvv Fb
+
+        Arbitrary canonicalization parameters Acc, Aoo, Avv, Bcc, Boo, Bvv
+        can be selected. In this implemention we use Davidson canonicalization:
+        Acc = Bcc = 1/2, Aoo = Avv = 1, Bcc = Bvv = 0  "in order to reproduce
+        UHF occupied and virtual alpha orbital energies when applied to molecule
+        with no beta electrons".
+        """
+        V_H, V_func, E_func = self.basis.get_int_integrals(
+            P_in, self.functional, create_graph=self.create_graph
+        )
+        V_H = V_H.sum(1)
+        Fa = self.T + self.V_ext + V_H + V_func[:, 0, ...]
+        Fb = self.T + self.V_ext + V_H + V_func[:, 1, ...]
+        Pa = P_in[:, 0, ...]
+        Pb = P_in[:, 1, ...]
+
+        Fc = (Fa + Fb) * 5e-1
+        Pc = torch.einsum("b...ik, bkj ->b...ij", Pb, self.S)
+        Po = torch.einsum("b...ik, bkj ->b...ij", Pa - Pb, self.S)
+        Pv = torch.eye(self.S.shape[-1]) - torch.einsum(
+            "b...ik, bkj ->b...ij", Pa, self.S
+        )
+
+        F = (
+            5e-1
+            * (
+                Pc.conj().transpose(-1, -2) @ Fc @ Pc
+                + Po.conj().transpose(-1, -2) @ Fa @ Po
+                + Pv.conj().transpose(-1, -2) @ Fa @ Pv
+            )
+            + Po.conj().transpose(-1, -2) @ Fb @ Pc
+            + Po.conj().transpose(-1, -2) @ Fa @ Pv
+            + Pv.conj().transpose(-1, -2) @ Fc @ Pc
+        )
+        F = F + F.conj().transpose(-1, -2)
+        if self.mixer == "pulay":
+            err = (F @ P_in.sum(1) @ self.S - self.S @ P_in.sum(1) @ F).flatten(1)
+            F = self.diis.step(F, err)
+        return F, V_H, V_func, E_func
+
+    def get_total_energy(
+        self,
+        P_in: Tensor,
+        V_H: Tensor,
+        V_func: Tensor,
+        E_func: Tensor,
+        energy_orb: Tensor,
+    ) -> Tensor:
+        energy = (
+            energy_orb.sum(-1)
+            + E_func
+            - ((V_H / 2 + V_func).squeeze() * P_in).sum((-3, -2, -1))
+            + self.basis.E_nuc
+        )
+        return energy
+
+    def check_convergence(
+        self, P_in: Tensor, P_out: Tensor, density_threshold: float
+    ) -> Tuple[Tensor, Tensor]:
+        P_out = P_out.sum(-3)
+        P_in = P_in.sum(-3)
+        density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
+        return density_diff, density_diff < density_threshold
+
+
 class DIIS:
     """DIIS class."""
 
