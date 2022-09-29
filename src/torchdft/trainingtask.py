@@ -75,7 +75,7 @@ class TrainingTask(nn.Module, ABC):
     functional: Functional
     steps: int
 
-    def prepare_data(
+    def prepare_validation_data(
         self,
         basis: Basis,
         occ: Tensor,
@@ -184,7 +184,7 @@ class TrainingTask(nn.Module, ABC):
         validation_chkpt = CheckpointStore()
         if validation_set is not None:
             assert validation_step
-            v_basis, v_occ, v_data, v_samples = self.prepare_data(
+            v_basis, v_occ, v_data, v_samples = self.prepare_validation_data(
                 validation_set[0], validation_set[1], validation_set[2]
             )
             self.v_basis = v_basis
@@ -313,7 +313,9 @@ class SCFTrainingTask(TrainingTask):
         **kwargs: Any,
     ) -> None:
         super().__init__()
-        basis, occ, data, self.train_samples = self.prepare_data(basis, occ, data)
+        basis, occ, data, self.train_samples = self.prepare_validation_data(
+            basis, occ, data
+        )
         self.make_solver = make_solver
         self.functional = functional
         self.basis = basis
