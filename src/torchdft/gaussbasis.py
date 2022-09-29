@@ -38,6 +38,7 @@ class GaussianBasis(Basis):
     phi: Tensor
     grid_coords: Tensor
     grid_weights: Tensor
+    dv: Tensor
     atom_coords: Tensor
     atom_charges: Tensor
     mask: Optional[Tensor]
@@ -53,6 +54,7 @@ class GaussianBasis(Basis):
         self.register_buffer("T", self._intor("int1e_kin"))
         self.register_buffer("V_ext", self._intor("int1e_nuc"))
         self.register_buffer("eri", self._intor("int2e"))
+        self.register_buffer("dv", self.T.new_ones(1))
         self.grid = _bapply(dft.gen_grid.Grids, self.mol)
         self.mask = None
 
