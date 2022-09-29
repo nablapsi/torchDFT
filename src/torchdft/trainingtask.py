@@ -8,7 +8,7 @@ import sys
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 from torch import Tensor, nn
@@ -34,11 +34,13 @@ log = logging.getLogger(__name__)
 class SCFData(nn.Module):
     energy: Tensor
     P: Tensor
+    C: Optional[Tensor]
 
-    def __init__(self, energy: Tensor, P: Tensor):
+    def __init__(self, energy: Tensor, P: Tensor, C: Tensor = None):
         super().__init__()
         self.register_buffer("energy", energy)
         self.register_buffer("P", P)
+        self.register_buffer("C", C)
 
 
 class TqdmStream:
