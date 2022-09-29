@@ -102,16 +102,6 @@ class TrainingTask(nn.Module, ABC):
         return basis, occ, data, samples
 
     @abstractmethod
-    def eval_model(
-        self, basis: Basis, occ: Tensor, data: SCFData
-    ) -> Tuple[SCFData, Metrics]:
-        pass
-
-    @abstractmethod
-    def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
-        pass
-
-    @abstractmethod
     def metrics_fn(
         self,
         basis: Basis,
@@ -283,9 +273,12 @@ class SCFTrainingTask(TrainingTask):
         self.steps = steps
         self.kwargs = kwargs
 
-    def eval_model(
-        self, basis: Basis, occ: Tensor, data: SCFData = None, **kwargs: Any
-    ) -> Tuple[SCFData, Metrics]:
+    def metrics_fn(
+        self,
+        basis: Basis,
+        occ: Tensor,
+        data: SCFData,
+    ) -> Metrics:
         """Evaluate model provided a basis and orbital occupation numbers.
 
         For a method that computes a fixed point, the gradient of the loss with
@@ -300,7 +293,7 @@ class SCFTrainingTask(TrainingTask):
         try:
             sol_guess = solver.solve(
                 create_graph=self.training,
-                **kwargs,
+                **self.kwargs,
             )
             sol = solver.solve(
                 create_graph=self.training,
@@ -308,21 +301,19 @@ class SCFTrainingTask(TrainingTask):
                 + (
                     torch.rand(sol_guess.P.shape[-1], device=sol_guess.P.device) * 1e-7
                 ).diag(),
-                **kwargs,
+                **self.kwargs,
             )
             metrics = {"SCF/iter": sol_guess.niter}
         except SCFNotConvergedError as e:
             sol = e.sol
             metrics = {"SCF/iter": sol.niter}
-        return SCFData(sol.E, sol.P), metrics
-
-    def _metrics_fn(self, basis: Basis, occ: Tensor, data: SCFData) -> Metrics:
-        data_pred, metrics = self.eval_model(basis, occ, **self.kwargs)
-        density_pred = basis.density(data_pred.P)
+        density_pred = basis.density(sol.P)
         density_true = basis.density(data.P)
         N = occ.sum(dim=-1)
-        energy_loss_sq = ((data_pred.energy - data.energy) ** 2 / N).mean()
-        density_loss_sq = ((basis.density_mse(density_pred - density_true)) / N).mean()
+        energy_loss_sq = (((sol.E - data.energy) ** 2 / N)[sol.converged]).mean()
+        density_loss_sq = (
+            ((basis.density_mse(density_pred - density_true)) / N)[sol.converged]
+        ).mean()
         loss_sq = energy_loss_sq + density_loss_sq
         if self.training:
             loss_sq.backward()
@@ -330,30 +321,4 @@ class SCFTrainingTask(TrainingTask):
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/regularization"] = density_loss_sq.detach().sqrt()
         metrics.update(basis.density_metrics_fn(density_pred, density_true))
-        return metrics
-
-    def metrics_fn(
-        self,
-        basis: Union[Basis, nn.ModuleList],
-        occ: Tensor,
-        data: SCFData,
-    ) -> Metrics:
-        """Evaluate the losses on current model."""
-        if isinstance(basis, Basis):
-            return self._metrics_fn(basis, occ, data)
-        metrics = [
-            self._metrics_fn(basis, occ, SCFData(*data))
-            for basis, occ, *data in zip(basis, occ, data.energy, data.P)
-        ]
-        metrics = {k: torch.stack([m[k] for m in metrics]) for k in metrics[0]}
-        metrics["loss/energy"] = (metrics["loss/energy"] ** 2).mean().sqrt()
-        metrics["loss/regularization"] = (
-            (metrics["loss/regularization"] ** 2).mean().sqrt()
-        )
-        metrics["loss"] = (
-            metrics["loss/energy"] ** 2 + metrics["loss/density"] ** 2
-        ).sqrt()
-        metrics["SCF/iter"] = max(metrics["SCF/iter"])
-        metrics["loss/quadrupole"] = (metrics["loss/quadrupole"] ** 2).mean().sqrt()
-        metrics["loss/density_rmse"] = (metrics["loss/density_rmse"] ** 2).mean().sqrt()
         return metrics
