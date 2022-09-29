@@ -42,6 +42,16 @@ class Basis(nn.Module, ABC):
         self, density: Tensor, density_ref: Tensor
     ) -> Dict[str, Tensor]:
         return {}
+
+    @abstractmethod
+    def get_psi(self, C: Tensor) -> Tensor:
+        """
+        Evaluate orbital from basis coefficients.
+
+        c = <phi_i|psi> where phi is the basis function.
+        """
+        pass
+
     @abstractmethod
     def get_density_gradient(self, P: Tensor) -> Tensor:
         pass

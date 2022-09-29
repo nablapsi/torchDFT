@@ -165,3 +165,6 @@ class GaussianBasis(Basis):
             .sum(dim=-1)
             .norm(dim=-2)
         )
+
+    def get_psi(self, C: Tensor) -> Tensor:
+        return (self.phi @ C).sum(-1)

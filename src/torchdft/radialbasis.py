@@ -147,3 +147,7 @@ class RadialBasis(Basis):
         u_l = u_l / grid
         u_r = torch.cumsum((ndv / grid).flip(-1), dim=-1).flip(-1)
         return u_l + u_r
+
+    def get_psi(self, C: Tensor) -> Tensor:
+        psi = C / self.grid_weights.sqrt()
+        return psi

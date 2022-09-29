@@ -147,6 +147,9 @@ class GridBasis(Basis):
             + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=-2))
         ) / self.grid_weights**2
 
+    def get_psi(self, C: Tensor) -> Tensor:
+        return C / self.grid_weights.sqrt()
+
 
 def get_hartree_potential(
     density: Tensor,
