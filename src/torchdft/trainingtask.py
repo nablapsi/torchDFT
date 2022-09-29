@@ -120,6 +120,31 @@ class TrainingTask(nn.Module, ABC):
         assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
+    def validation_eval(
+        self, basis: Basis, occ: Tensor, data: SCFData, **kwargs: Any
+    ) -> Tuple[Tensor, Metrics]:
+        solver = self.make_solver(basis, occ, self.functional)
+        try:
+            sol = solver.solve(P_guess=data.P, **kwargs)
+        except SCFNotConvergedError as e:
+            sol = e.sol
+        Eloss = (sol.E - data.energy).abs()
+        nloss = basis.density_mse(basis.density(sol.P - data.P))
+        Eloss[sol.converged.logical_not()] = torch.nan
+        nloss[sol.converged.logical_not()] = torch.nan
+        metrics = {}
+        if data.P.shape[0] > 1:
+            for i, (ener, den) in enumerate(zip(Eloss, nloss)):
+                metrics[f"individual_validation/Eloss{i}"] = ener.detach()
+                metrics[f"individual_validation/nloss{i}"] = den.detach().sqrt()
+        Eloss, nloss = Eloss.mean(), nloss.mean()
+        loss = Eloss**2 + nloss
+        metrics["validation/SCFiter"] = sol.niter
+        metrics["validation/Eloss"] = Eloss
+        metrics["validation/nloss"] = nloss.sqrt()
+        metrics["validation/loss"] = loss.sqrt()
+        return loss, metrics
+
     def fit(  # noqa: C901 TODO too complex
         self,
         workdir: str,
@@ -134,6 +159,7 @@ class TrainingTask(nn.Module, ABC):
         with_adam: bool = False,
         loss_threshold: float = 0.0,
         clip_grad_norm: float = None,
+        **validation_kwargs: Any,
     ) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir)
@@ -182,10 +208,12 @@ class TrainingTask(nn.Module, ABC):
                     )
                 if validation_step != 0 and step % validation_step == 0:
                     self.eval()
-                    v_metrics: Metrics = self.metrics_fn(v_basis, v_occ, v_data)
-                    v_metrics["loss/loss"] = v_metrics.pop("loss")
+                    v_metrics: Metrics
+                    v_loss, v_metrics = self.validation_eval(
+                        v_basis, v_occ, v_data, **validation_kwargs
+                    )
                     for key in v_metrics.keys():
-                        metrics[key + "_validation"] = v_metrics[key]
+                        metrics[key] = v_metrics[key]
                     self.train()
                 with torch.no_grad():
                     self.after_step(step, metrics, writer)
