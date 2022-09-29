@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import math
 from typing import Callable, List, Optional
 
 import torch
@@ -261,3 +262,213 @@ class TrainableGGA(Functional):
         log_grad = density.grad.log()
         x = torch.stack([log_n, log_grad], dim=-1)
         return -F.softplus(log_n * 4 / 3 + self.mlp(x).squeeze(dim=-1))
+
+
+class NDVNet(Functional):
+    """KEF with [n, 4pin] features."""
+
+    def __init__(self, alpha: float = 0.1, negative_transform: bool = False) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+        self.transfer = nn.SiLU()
+
+        self.mlp = nn.Sequential(
+            nn.Linear(2, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.value
+        ndv = den.value * 4e0 * torch.pi * den.grid**2
+        x = torch.stack((n, ndv), -1)
+        x = self.mlp(x)
+        return self.sign * x.squeeze(-1)
+
+
+class NDVConvNet(Functional):
+    """KEF with [n, 4pin, conv(n)] features."""
+
+    def __init__(self, alpha: float = 0.1, negative_transform: bool = False) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+        self.transfer = nn.SiLU()
+        self.alpha = alpha
+
+        self.mlp = nn.Sequential(
+            nn.Linear(3, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def convolution(self, den: Density, alpha: float) -> Tensor:
+        g = (den.grid[:, None] - den.grid) ** 2
+        expo = (-0.5 * g / alpha).exp() / math.sqrt(2e0 * torch.pi * alpha)
+        return torch.einsum("ij, ...j-> ...i", expo, den.value * den.grid_weights)
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.value
+        ndv = den.value * 4e0 * torch.pi * den.grid**2
+        glob = self.convolution(den, self.alpha)
+        x = torch.stack((n, ndv, glob), -1)
+        x = self.mlp(x)
+        return self.sign * x.squeeze(-1)
+
+
+class NDVNConvNet(Functional):
+    """KEF with [n, 4pin, conv(n)] features."""
+
+    alpha: Tensor
+
+    def __init__(
+        self,
+        N: int = 2,
+        minN: float = -3.0,
+        maxN: float = -1.0,
+        negative_transform: bool = False,
+    ) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+        self.transfer = nn.SiLU()
+        self.N = N
+        self.register_buffer(
+            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
+        )
+
+        self.mlp = nn.Sequential(
+            nn.Linear(self.N + 2, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def convolution(self, den: Density, alpha: Tensor) -> Tensor:
+        g = (den.grid[..., :, None] - den.grid[..., None, :]) ** 2
+        expo = (-0.5 * g[..., :, :, None] / alpha[None, None, :]).exp() / (
+            2e0 * torch.pi * alpha[None, None, :]
+        ).sqrt()
+        return torch.einsum("...ijk, ...j-> ...ik", expo, den.value * den.grid_weights)
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.value
+        ndv = den.value * 4e0 * torch.pi * den.grid**2
+        glob = self.convolution(den, self.alpha)
+        x = torch.cat((n[..., None], ndv[..., None], glob), -1)
+        x = self.mlp(x)
+        return self.sign * x.squeeze(-1)
+
+
+class NDVNConvLogNet(Functional):
+    """KEF with [log(n), 4pin, conv(n)] features."""
+
+    alpha: Tensor
+
+    def __init__(
+        self,
+        N: int = 2,
+        minN: float = -3.0,
+        maxN: float = -1.0,
+        negative_transform: bool = False,
+    ) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+        self.transfer = nn.SiLU()
+        self.N = N
+        self.register_buffer(
+            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
+        )
+
+        self.mlp = nn.Sequential(
+            nn.Linear(self.N + 2, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def convolution(self, den: Density, alpha: Tensor) -> Tensor:
+        g = (den.grid[..., :, None] - den.grid[..., None, :]) ** 2
+        expo = (-0.5 * g[..., :, :, None] / alpha[None, None, :]).exp() / (
+            2e0 * torch.pi * alpha[None, None, :]
+        ).sqrt()
+        return torch.einsum("...ijk, ...j-> ...ik", expo, den.value * den.grid_weights)
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.value
+        logn = (n + 1e-4).log()
+        ndv = den.value * 4e0 * torch.pi * den.grid**2
+        glob = self.convolution(den, self.alpha)
+        x = torch.cat((logn[..., None], ndv[..., None], glob), -1)
+        x = self.mlp(x)
+        return self.sign * x.squeeze(-1)
+
+
+class NDVNConvNetAlpha(Functional):
+    """KEF with [n, 4pin, conv(n)] features with trainable convolution."""
+
+    alpha: Tensor
+
+    def __init__(self, N: int = 2, negative_transform: bool = False) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+        self.transfer = nn.SiLU()
+        self.N = N
+        self.xi = nn.Parameter(torch.Tensor(self.N))
+        nn.init.uniform_(self.xi, a=-2.0, b=2.0)
+        self.maxval = 1
+        self.minval = 3
+
+        self.mlp = nn.Sequential(
+            nn.Linear(self.N + 2, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def convolution(self, den: Density) -> Tensor:
+        alpha = self.minval + (self.maxval - self.minval) * torch.sigmoid(self.xi)
+        alpha = 10**-alpha
+        g = (den.grid[..., :, None] - den.grid[..., None, :]) ** 2
+        expo = (-0.5 * g[..., :, :, None] / alpha[None, None, :]).exp() / (
+            2e0 * torch.pi * alpha[None, None, :]
+        ).sqrt()
+        return torch.einsum("...ijk, ...j-> ...ik", expo, den.value * den.grid_weights)
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.value
+        ndv = den.value * 4e0 * torch.pi * den.grid**2
+        glob = self.convolution(den)
+        x = torch.cat((n[..., None], ndv[..., None], glob), -1)
+        x = self.mlp(x)
+        return self.sign * x.squeeze(-1)
