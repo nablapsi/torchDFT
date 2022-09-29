@@ -38,7 +38,7 @@ class RadialBasis(Basis):
         self.register_buffer("dx", get_dx(self.grid))
         self.register_buffer("dv", 4 * math.pi * self.grid ** 2 * self.dx)
         self.register_buffer("Z", self.system.Z.squeeze(-1))
-        self.register_buffer("E_nuc", torch.tensor(0.0))
+        self.register_buffer("E_nuc", self.Z.new_zeros(self.Z.shape))
         self.register_buffer("T", -5e-1 * self.get_laplacian())
         self.register_buffer("V_ext", (-self.system.Z / self.grid).diag_embed())
         self.register_buffer(
