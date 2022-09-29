@@ -8,7 +8,7 @@ import sys
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 import torch
 from torch import Tensor, nn
@@ -66,7 +66,7 @@ class TrainingTask(nn.Module, ABC):
     """Represents a training task."""
 
     make_solver: type[SCFSolver]
-    basis: Union[Basis, nn.ModuleList]
+    basis: Basis
     occ: Tensor
     data: SCFData
     train_samples: int
@@ -75,26 +75,22 @@ class TrainingTask(nn.Module, ABC):
 
     def prepare_data(
         self,
-        basis: Union[Basis, Iterable[Basis]],
+        basis: Basis,
         occ: Tensor,
         data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
-    ) -> Tuple[Union[Basis, nn.ModuleList], Tensor, SCFData, int]:
+    ) -> Tuple[Basis, Tensor, SCFData, int]:
         if not isinstance(data, SCFData):
             energy, P = data
             energy = torch.as_tensor(energy)
             data = SCFData(energy, P)
-        if isinstance(basis, Basis) and not basis.E_nuc.shape:  # single basis
+        if not basis.E_nuc.shape:  # single basis
             samples = 1
             assert len(occ.shape) == 1
             assert len(data.energy.shape) == 0
             assert len(data.P.shape) == 2
         else:
-            if isinstance(basis, Basis):  # batched basis
-                assert len(basis.E_nuc.shape) == 1
-                samples = basis.E_nuc.shape[0]
-            else:  # iterable of bases
-                basis = nn.ModuleList(list(basis))
-                samples = len(basis)
+            samples = basis.E_nuc.shape[0]
+            assert len(basis.E_nuc.shape) == 1
             assert len(occ.shape) == 2
             if occ.shape[0] == 1:
                 occ = occ.expand(samples, -1)
@@ -118,7 +114,7 @@ class TrainingTask(nn.Module, ABC):
     @abstractmethod
     def metrics_fn(
         self,
-        basis: Union[Basis, nn.ModuleList],
+        basis: Basis,
         occ: Tensor,
         data: SCFData,
     ) -> Metrics:
@@ -140,7 +136,7 @@ class TrainingTask(nn.Module, ABC):
         device: str = "cuda",
         seed: int = 0,
         validation_set: Tuple[
-            Union[Basis, Iterable[Basis]],
+            Basis,
             Tensor,
             Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
         ] = None,
@@ -270,7 +266,7 @@ class SCFTrainingTask(TrainingTask):
     def __init__(
         self,
         functional: Functional,
-        basis: Union[Basis, Iterable[Basis]],
+        basis: Basis,
         occ: Tensor,
         data: Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
         make_solver: type[SCFSolver],
