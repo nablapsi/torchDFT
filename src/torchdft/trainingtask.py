@@ -43,6 +43,62 @@ class SCFData(nn.Module):
         self.register_buffer("C", C)
 
 
+class GradTTData(nn.Module):
+    N: Tensor
+    occ_mask: Tensor
+    psi: Tensor
+    grid: Tensor
+    grid_weights: Tensor
+    dv: Tensor
+    n: Tensor
+    TVextVH: Tensor
+    energybase: Tensor
+    Eref: Tensor
+
+    def __init__(
+        self,
+        N: Tensor,
+        occ_mask: Tensor,
+        psi: Tensor,
+        grid: Tensor,
+        grid_weights: Tensor,
+        dv: Tensor,
+        n: Tensor,
+        TVextVH: Tensor,
+        energybase: Tensor,
+        Eref: Tensor,
+    ):
+        super().__init__()
+        self.gridbatch = len(grid.shape) == 2
+        self.register_buffer("N", N)
+        self.register_buffer("occ_mask", occ_mask)
+        self.register_buffer("psi", psi)
+        self.register_buffer("grid", grid)
+        self.register_buffer("grid_weights", grid_weights)
+        self.register_buffer("dv", dv)
+        self.register_buffer("n", n)
+        self.register_buffer("TVextVH", TVextVH)
+        self.register_buffer("energybase", energybase)
+        self.register_buffer("Eref", Eref)
+
+    def __getitem__(self, item: List[int]) -> GradTTData:
+        return GradTTData(
+            self.N[item],
+            self.occ_mask[item],
+            self.psi[item],
+            self.grid,
+            self.grid_weights,
+            self.dv,
+            self.n[item],
+            self.TVextVH[item],
+            self.energybase[item],
+            self.Eref[item],
+        )
+
+    def __len__(self) -> int:
+        return self.N.shape[0]
+
+
 class TqdmStream:
     def write(self, msg: str) -> int:
         try:
