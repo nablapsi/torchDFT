@@ -104,23 +104,8 @@ class TrainingTask(nn.Module, ABC):
         return basis, occ, data, samples
 
     @abstractmethod
-    def metrics_fn(
-        self,
-        basis: Basis,
-        occ: Tensor,
-        data: SCFData,
-    ) -> Metrics:
-        pass
-
     def training_step(self) -> Metrics:
-        """Execute a training step."""
-        assert self.training
-        metrics = self.metrics_fn(self.basis, self.occ, self.data)
-        # Evaluate (d RMSE / d theta) from (d MSE / d theta)
-        for p in self.functional.parameters():
-            p.grad = p.grad / (2.0 * metrics["loss"])
-        assert not any(v.grad_fn for v in metrics.values())
-        return metrics
+        pass
 
     def validation_eval(
         self, basis: Basis, occ: Tensor, data: SCFData, **kwargs: Any
@@ -301,6 +286,7 @@ class SCFTrainingTask(TrainingTask):
     """Represents a training task involving an SCF calculation."""
 
     make_solver: type[SCFSolver]
+    data: SCFData
 
     def __init__(
         self,
@@ -371,4 +357,14 @@ class SCFTrainingTask(TrainingTask):
         metrics["loss"] = loss_sq.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/regularization"] = density_loss_sq.detach().sqrt()
+        return metrics
+
+    def training_step(self) -> Metrics:
+        """Execute a training step."""
+        assert self.training
+        metrics = self.metrics_fn(self.basis, self.occ, self.data)
+        # Evaluate (d RMSE / d theta) from (d MSE / d theta)
+        for p in self.functional.parameters():
+            p.grad = p.grad / (2.0 * metrics["loss"])
+        assert not any(v.grad_fn for v in metrics.values())
         return metrics
