@@ -168,16 +168,16 @@ class TrainingTask(nn.Module, ABC):
             torch.manual_seed(seed)
         writer = SummaryWriter(log_dir=workdir)
         log.info(f"Moving to device ({device})...")
-        self.to(device)
         chkpt = CheckpointStore()
         if validation_set is not None:
             assert validation_step
             v_basis, v_occ, v_data, v_samples = self.prepare_data(
                 validation_set[0], validation_set[1], validation_set[2]
             )
-            v_basis.to(device)
-            v_occ = v_occ.to(device)
-            v_data.to(device)
+            self.v_basis = v_basis
+            self.register_buffer("v_occ", v_occ)
+            self.v_data = v_data
+        self.to(device)
         log.info("Initialized training")
         step = 0
         last_log = 0.0
@@ -207,10 +207,11 @@ class TrainingTask(nn.Module, ABC):
                         workdir / f"chkpt-{step}.pt",  # type: ignore
                     )
                 if validation_step != 0 and step % validation_step == 0:
+                    assert type(self.v_occ) is Tensor
                     self.eval()
                     v_metrics: Metrics
                     v_loss, v_metrics = self.validation_eval(
-                        v_basis, v_occ, v_data, **validation_kwargs
+                        self.v_basis, self.v_occ, self.v_data, **validation_kwargs
                     )
                     for key in v_metrics.keys():
                         metrics[key] = v_metrics[key]
