@@ -102,6 +102,12 @@ class RadialBasis(Basis):
             "...ij, ...j -> ...i", self.grad_operator, density
         ).squeeze()
 
+    def get_func_laplacian(self, C: Tensor) -> Tensor:
+        psi = self.get_psi(C)
+        assert psi.shape[0] == self.T.shape[0]
+        lap = -2 * torch.einsum("b...ij, b...j -> b...i", self.T, psi)
+        return lap
+
     def density_mse(self, density: Tensor) -> Tensor:
         return (density.pow(2) * self.dv * self.grid_weights).sum(dim=-1)
 

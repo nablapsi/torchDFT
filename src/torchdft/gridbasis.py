@@ -115,6 +115,10 @@ class GridBasis(Basis):
         density = self.density(P)
         return torch.einsum("ij, ...j -> ...i", self.grad_operator, density)
 
+    def get_func_laplacian(self, C: Tensor) -> Tensor:
+        psi = self.get_psi(C)
+        return -2 * torch.einsum("...ij, ...j -> ...i", self.T, psi)
+
     def density_mse(self, density: Tensor) -> Tensor:
         return density.pow(2).sum(dim=-1) * self.grid_weights
 

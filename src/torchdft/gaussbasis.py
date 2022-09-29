@@ -66,12 +66,13 @@ class GaussianBasis(Basis):
         )
         self.register_buffer("grid_coords", _bapply(lambda g: fnp(g.coords), self.grid))
         phi = _bapply(
-            lambda m, g: fnp(dft.numint.eval_ao(m, g.coords, deriv=1)),
+            lambda m, g: fnp(dft.numint.eval_ao(m, g.coords, deriv=2)),
             self.mol,
             self.grid,
         )
         self.register_buffer("phi", phi[..., 0, :, :])
         self.register_buffer("grad_phi", phi[..., 1:4, :, :])
+        self.register_buffer("lap_phi", phi[..., [4, 7, 9], :, :])  # xx, yy, zz
         self.register_buffer(
             "E_nuc", _bapply(lambda m: torch.tensor(m.energy_nuc()), self.mol)
         )
@@ -168,3 +169,12 @@ class GaussianBasis(Basis):
 
     def get_psi(self, C: Tensor) -> Tensor:
         return (self.phi @ C).sum(-1)
+
+    def get_func_laplacian(self, C: Tensor) -> Tensor:
+        """Get laplacian of a function from expansion coefficients."""
+        # x: Coordinate index.
+        # g: Grid index.
+        # b: Basis index.
+        # n: Batch index.
+        # o: Orbital index.
+        return torch.einsum("xgb, n...ob-> n...og", self.lap_phi, C)

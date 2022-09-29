@@ -55,3 +55,13 @@ class Basis(nn.Module, ABC):
     @abstractmethod
     def get_density_gradient(self, P: Tensor) -> Tensor:
         pass
+
+    @abstractmethod
+    def get_func_laplacian(self, C: Tensor) -> Tensor:
+        """
+        Evaluate the laplacian of an orbital from the basis coefficients.
+
+        return sum_i c_i lap <x|phi_i> where where phi is the basis function.
+        """
+
+        pass
