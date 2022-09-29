@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 
 from .basis import Basis
+from .density import Density
 from .errors import GradientError, SCFNotConvergedError
 from .functional import Functional
 from .gaussbasis import GaussianBasis
@@ -123,10 +124,10 @@ class CheckpointStore:
 class TrainingTask(nn.Module, ABC):
     """Represents a training task."""
 
-    make_solver: type[SCFSolver]
+    make_solver: Optional[type[SCFSolver]]
     basis: Basis
     occ: Tensor
-    data: SCFData
+    data: Union[SCFData, GradTTData]
     train_samples: int
     functional: Functional
     steps: int
@@ -166,6 +167,7 @@ class TrainingTask(nn.Module, ABC):
     def validation_eval(
         self, basis: Basis, occ: Tensor, data: SCFData, **kwargs: Any
     ) -> Tuple[Tensor, Metrics]:
+        assert self.make_solver is not None
         solver = self.make_solver(basis, occ, self.functional)
         try:
             sol = solver.solve(P_guess=data.P, **kwargs)
@@ -365,6 +367,7 @@ class SCFTrainingTask(TrainingTask):
         self.data = data
         self.steps = steps
         self.kwargs = kwargs
+        assert self.make_solver is not None
 
     def metrics_fn(
         self,
@@ -419,6 +422,139 @@ class SCFTrainingTask(TrainingTask):
         """Execute a training step."""
         assert self.training
         metrics = self.metrics_fn(self.basis, self.occ, self.data)
+        # Evaluate (d RMSE / d theta) from (d MSE / d theta)
+        for p in self.functional.parameters():
+            p.grad = p.grad / (2.0 * metrics["loss"])
+        assert not any(v.grad_fn for v in metrics.values())
+        return metrics
+
+
+class GradientTrainingTask(TrainingTask):
+    """Represents a training task with gradient regularization."""
+
+    basis: Basis
+    occ: Tensor
+    data: GradTTData
+    train_samples: int
+    functional: Functional
+    steps: int
+
+    def __init__(
+        self,
+        functional: Functional,
+        basis: Basis,
+        occ: Tensor,
+        data: SCFData,
+        make_solver: Optional[type[SCFSolver]] = None,
+        steps: int = 200,
+        l: float = 1.0,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__()
+        self.functional = functional
+        basis, occ, data, self.train_sample = self.prepare_data(basis, occ, data)
+        self.basis = basis
+        self.data = data
+        self.register_buffer("occ", occ)
+        self.steps = steps
+        # In this training task it is not compulsory to have a solver,
+        # but it is required for validation
+        self.make_solver = make_solver
+        self.l = l
+        self.kwargs = kwargs
+
+    def prepare_data(
+        self,
+        basis: Basis,
+        occ: Tensor,
+        data: SCFData,
+    ) -> Tuple[Basis, Tensor, GradTTData, int]:
+        assert data.C is not None
+        train_samples = data.energy.shape[0]
+        occ_mask = torch.where(occ > 0, occ.new_ones(1), occ.new_zeros(1))
+        psi = basis.get_psi(data.C)
+        n = basis.density(data.P)
+        # data.P.shape = [batch, (s), basis, basis]
+        # P.shape = [batch, (s), (l), basis, basis]
+        P = (data.C.transpose(-2, -1) * occ[..., None, :]) @ data.C
+        S, T, Vext = basis.get_core_integrals()
+        VH, Vfunc, Efunc = basis.get_int_integrals(data.P, self.functional)
+        vext = Vext.diagonal(dim1=-1, dim2=-2)
+        vH = VH.diagonal(dim1=-1, dim2=-2)
+        laplacian = basis.get_func_laplacian(data.C)
+        energybase = ((T + Vext + 5e-1 * VH) * P).flatten(1).sum(-1) + basis.E_nuc
+        TVextVH = (-0.5 * laplacian).squeeze(-1) + (vext + vH)[..., None, :] * psi
+        N = occ.reshape(occ.shape[0], -1).sum(-1)
+        return (
+            basis,
+            occ,
+            GradTTData(
+                N,
+                occ_mask,
+                psi,
+                basis.grid,
+                basis.grid_weights,
+                basis.dv,
+                n,
+                TVextVH,
+                energybase,
+                data.energy,
+            ),
+            train_samples,
+        )
+
+    def metrics_fn(self, data: GradTTData) -> Metrics:
+        n = data.n.detach().requires_grad_()
+        self.density = Density(
+            n,
+            data.grid,
+            data.grid_weights * data.dv,
+        )
+        eps_func = self.functional(self.density)
+        if self.functional.per_electron:
+            eps_func = eps_func * self.density.density
+        E_func = (eps_func * self.density.grid_weights).sum(-1)
+        (vfunc,) = torch.autograd.grad(
+            eps_func.sum(), self.density.value, create_graph=self.training
+        )
+        vfunc = (
+            vfunc[..., None, :]
+            if len(data.TVextVH.shape) == 3
+            else vfunc[..., None, None, :]
+        )
+        H1 = data.TVextVH + vfunc * data.psi
+        mu = (data.psi * data.grid_weights * H1).sum(-1)
+        H2 = mu[..., None] * data.psi
+        grad2 = data.occ_mask[..., None] * (H1 - H2) ** 2
+        # grad2.shape = [batch, (spin), (l), orbital, grid]
+        # data.grid_weights.shape = [(grid_batch), (grid)]
+        grad2 = ((grad2.movedim(0, -2) * data.grid_weights).movedim(-2, 0)).reshape(
+            grad2.shape[0], -1
+        )
+
+        energy_loss_sq = (data.Eref - (data.energybase + E_func)) ** 2 / data.N
+        regularization_sq = grad2.sum(-1)
+
+        metrics = {}
+        if data.Eref.shape[0] > 1:
+            for i, (e, r) in enumerate(zip(energy_loss_sq, regularization_sq)):
+                metrics[f"individual_loss/energy{i}"] = e.detach().sqrt()
+                metrics[f"individual_loss/regularization{i}"] = r.detach().sqrt()
+
+        energy_loss_sq = energy_loss_sq.mean()
+        regularization_sq = regularization_sq.mean()
+        loss_sq = energy_loss_sq + self.l * regularization_sq
+        loss_sq.backward()
+
+        metrics["loss"] = loss_sq.detach().sqrt()
+        metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
+        metrics["loss/regularization"] = regularization_sq.detach().sqrt()
+        return metrics
+
+    def training_step(self) -> Metrics:
+        """Execute a training step."""
+        assert self.training
+        metrics = self.metrics_fn(self.data)
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
             p.grad = p.grad / (2.0 * metrics["loss"])
