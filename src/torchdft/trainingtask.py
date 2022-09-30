@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import sys
 import time
 from abc import ABC, abstractmethod
@@ -98,6 +99,35 @@ class GradTTData(nn.Module):
 
     def __len__(self) -> int:
         return self.N.shape[0]
+
+
+class DataLoader:
+    def __init__(self, data: GradTTData, batchsize: int, shuffle: bool = True):
+        self.data = data
+        self.batchsize = batchsize
+        self.shuffle = shuffle
+        self.datasize = len(self.data)
+
+        self.data_indexes = list(range(self.datasize))
+        self.nminimibatch = self.datasize // self.batchsize + (
+            int(bool(self.datasize % self.batchsize))
+        )
+
+    def __iter__(self) -> DataLoader:
+        self.n = 0
+        if self.shuffle:
+            random.shuffle(self.data_indexes)
+        return self
+
+    def __next__(self) -> GradTTData:
+        if self.n < self.nminimibatch:
+            batch = self.data_indexes[
+                self.n * self.batchsize : (self.n + 1) * self.batchsize
+            ]
+            self.n += 1
+            return self.data[batch]
+        else:
+            raise StopIteration
 
 
 class TqdmStream:
