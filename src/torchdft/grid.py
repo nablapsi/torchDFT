@@ -1,6 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+from typing import List
+
 import torch
 from torch import Tensor, nn
 
@@ -47,3 +49,31 @@ class RadialGrid(Grid):
         self.grid = torch.arange(dx, end + dx, dx)
         self.grid_weights = torch.tensor(dx)
         self.dv = 4 * torch.pi * self.grid**2
+
+
+class GridBatch(Grid):
+    """Class to deal with grids of different dimensions."""
+
+    def __init__(self, grid_list: List[Grid]):
+        n_grids = len(grid_list)
+        max_grid_len = max([len(grid.grid) for grid in grid_list])
+        if grid_list[0].grid_weights.shape:
+            max_gridw_len = max([len(grid.grid_weights) for grid in grid_list])
+        else:
+            max_gridw_len = 1
+        if grid_list[0].dv.shape:
+            max_dv_len = max([len(grid.dv) for grid in grid_list])
+        else:
+            max_dv_len = 1
+        self.grid = grid_list[0].grid.new_zeros(n_grids, max_grid_len)
+        self.grid_weights = grid_list[0].grid.new_zeros(n_grids, max_gridw_len)
+        self.dv = grid_list[0].grid.new_zeros(n_grids, max_dv_len)
+        for i, g in enumerate(grid_list):
+            maxg = g.grid.shape[0]
+            maxgw = max_gridw_len if max_gridw_len == 1 else g.grid_weights.shape[0]
+            maxdv = max_dv_len if max_dv_len == 1 else g.dv.shape[0]
+            self.grid[i, :maxg] = g.grid
+            self.grid_weights[i, :maxgw] = g.grid_weights
+            self.dv[i, :maxdv] = g.dv
+        self.grid_weights = self.grid_weights.squeeze(-1)
+        self.dv = self.dv.squeeze(-1)
