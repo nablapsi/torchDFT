@@ -161,6 +161,7 @@ class TrainingTask(nn.Module, ABC):
     train_samples: int
     functional: Functional
     steps: int
+    supports_minibatch = False
 
     def prepare_validation_data(
         self,
@@ -191,7 +192,7 @@ class TrainingTask(nn.Module, ABC):
         return basis, occ, data, samples
 
     @abstractmethod
-    def training_step(self) -> Metrics:
+    def training_step(self, data: Union[SCFData, GradTTData]) -> Metrics:
         pass
 
     def validation_eval(
@@ -213,7 +214,7 @@ class TrainingTask(nn.Module, ABC):
         metrics = {}
         for key in nmetrics.keys():
             nmetrics[key][sol.converged.logical_not()] = torch.nan
-        if data.P.shape[0] > 1:
+        if data.P.shape[0] > 1 and self.minibatchsize is None:
             for i, (ener, den) in enumerate(zip(Eloss, nloss)):
                 metrics[f"individual_validation/Eloss{i}"] = ener.detach()
                 metrics[f"individual_validation/nloss{i}"] = den.detach().sqrt()
@@ -244,10 +245,19 @@ class TrainingTask(nn.Module, ABC):
         loss_threshold: float = 0.0,
         clip_grad_norm: float = None,
         lr: float = 1e-2,
+        minibatchsize: int = None,
         **validation_kwargs: Any,
     ) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir)
+        self.minibatchsize = minibatchsize
+        assert self.minibatchsize is None or self.supports_minibatch
+        if self.minibatchsize is not None:
+            assert self.supports_minibatch
+            assert type(self.data) == GradTTData
+            dataloader = DataLoader(
+                self.data, batchsize=self.minibatchsize, shuffle=True
+            )
         if seed is not None:
             log.info(f"Setting random seed: {seed}")
             torch.manual_seed(seed)
@@ -274,7 +284,14 @@ class TrainingTask(nn.Module, ABC):
             def closure() -> float:
                 nonlocal step, last_log, metrics, bestv_loss
                 opt.zero_grad()
-                metrics = self.training_step()
+                if not self.minibatchsize:
+                    metrics = self.training_step(self.data)
+                else:
+                    _metrics = [self.training_step(data) for data in dataloader]
+                    metrics = {
+                        k: torch.stack([m[k] for m in _metrics]).mean()
+                        for k in _metrics[0]
+                    }
                 assert not any(v.grad_fn for v in metrics.values())
                 if clip_grad_norm is not None:
                     torch.nn.utils.clip_grad_norm_(
@@ -334,6 +351,9 @@ class TrainingTask(nn.Module, ABC):
                     scheduler.step(loss)
                     if loss < loss_threshold:
                         break
+            if self.minibatchsize is not None:
+                self.minibatchsize = None
+                log.info("Switching off minibatch for LBFGS optimizer")
             opt = torch.optim.LBFGS(
                 self.functional.parameters(),
                 line_search_fn="strong_wolfe",
@@ -448,10 +468,11 @@ class SCFTrainingTask(TrainingTask):
         metrics["loss/regularization"] = density_loss_sq.detach().sqrt()
         return metrics
 
-    def training_step(self) -> Metrics:
+    def training_step(self, data: Union[SCFData, GradTTData]) -> Metrics:
         """Execute a training step."""
         assert self.training
-        metrics = self.metrics_fn(self.basis, self.occ, self.data)
+        assert type(data) == SCFData
+        metrics = self.metrics_fn(self.basis, self.occ, data)
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
             p.grad = p.grad / (2.0 * metrics["loss"])
@@ -468,6 +489,7 @@ class GradientTrainingTask(TrainingTask):
     train_samples: int
     functional: Functional
     steps: int
+    supports_minibatch = True
 
     def __init__(
         self,
@@ -492,6 +514,7 @@ class GradientTrainingTask(TrainingTask):
         self.make_solver = make_solver
         self.l = l
         self.kwargs = kwargs
+        self.minibatchsize = None
 
     def prepare_data(
         self,
@@ -566,7 +589,7 @@ class GradientTrainingTask(TrainingTask):
         regularization_sq = grad2.sum(-1)
 
         metrics = {}
-        if data.Eref.shape[0] > 1:
+        if data.Eref.shape[0] > 1 and self.minibatchsize is None:
             for i, (e, r) in enumerate(zip(energy_loss_sq, regularization_sq)):
                 metrics[f"individual_loss/energy{i}"] = e.detach().sqrt()
                 metrics[f"individual_loss/regularization{i}"] = r.detach().sqrt()
@@ -581,10 +604,11 @@ class GradientTrainingTask(TrainingTask):
         metrics["loss/regularization"] = regularization_sq.detach().sqrt()
         return metrics
 
-    def training_step(self) -> Metrics:
+    def training_step(self, data: Union[SCFData, GradTTData]) -> Metrics:
         """Execute a training step."""
         assert self.training
-        metrics = self.metrics_fn(self.data)
+        assert type(data) == GradTTData
+        metrics = self.metrics_fn(data)
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
             p.grad = p.grad / (2.0 * metrics["loss"])
