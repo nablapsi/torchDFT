@@ -162,7 +162,7 @@ def soft_coulomb(r: Tensor) -> Tensor:
 
     Evaluates the soft coulomb interaction.
     """
-    return 1 / torch.sqrt(r ** 2 + 1e0)
+    return 1 / torch.sqrt(r**2 + 1e0)
 
 
 def exp_coulomb(r: Tensor) -> Tensor:
