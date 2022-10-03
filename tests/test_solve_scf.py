@@ -4,7 +4,7 @@ from torch.testing import assert_allclose
 
 from torchdft.errors import SCFNotConvergedError
 from torchdft.gaussbasis import GaussianBasis
-from torchdft.grid import RadialGrid, Uniform1DGrid
+from torchdft.grid import GridBatch, RadialGrid, Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.radialbasis import RadialBasis
 from torchdft.scf import RKS, ROKS, UKS
@@ -369,3 +369,58 @@ def test_ROKS_gaussbasis_N():
         mixer="pulay",
     )
     assert_allclose(E0, sol.E[0])
+
+
+def test_solve_batch_grid():
+    Z = 5
+    system = System(centers=torch.tensor([0]), Z=torch.tensor([Z]), spin=Z % 2)
+
+    # Grid 1
+    grid1 = RadialGrid(end=10, dx=2.5e-2)
+    basis = RadialBasis(system, grid1)
+    solver = RKS(
+        basis,
+        system.occ("aufbau,RKS"),
+        functional=LdaPw92(),
+    )
+    sol1 = solver.solve(
+        mixer="pulaydensity",
+        density_threshold=1e-9,
+        extra_fock_channel=True,
+    )
+
+    # Grid 2
+    grid2 = RadialGrid(end=10, dx=2.5e-2)
+    basis = RadialBasis(system, grid2)
+    solver = RKS(
+        basis,
+        system.occ("aufbau,RKS"),
+        functional=LdaPw92(),
+    )
+    sol2 = solver.solve(
+        mixer="pulaydensity",
+        density_threshold=1e-9,
+        extra_fock_channel=True,
+    )
+
+    # Batch grid
+    grid = GridBatch([grid1, grid2])
+    system = SystemBatch(
+        [
+            System(centers=torch.tensor([0]), Z=torch.tensor([Z]), spin=Z % 2),
+            System(centers=torch.tensor([0]), Z=torch.tensor([Z]), spin=Z % 2),
+        ]
+    )
+    basis = RadialBasis(system, grid)
+    solver = RKS(
+        basis,
+        system.occ("aufbau,RKS"),
+        functional=LdaPw92(),
+    )
+    sol = solver.solve(
+        mixer="pulaydensity",
+        density_threshold=1e-9,
+        extra_fock_channel=True,
+    )
+    assert_allclose(sol1.E[0], sol.E[0])
+    assert_allclose(sol2.E[0], sol.E[1])

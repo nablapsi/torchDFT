@@ -14,7 +14,6 @@ from .density import Density
 from .functional import Functional
 from .grid import Grid
 from .gridbasis import get_hartree_potential
-from .utils import get_dx
 
 
 class SigLayer(nn.Module):
@@ -24,7 +23,7 @@ class SigLayer(nn.Module):
         super().__init__()
         self.grid = grid.grid
         self.interaction_fn = interaction_fn
-        self.dx = get_dx(self.grid)
+        self.dx = grid.grid_weights
         self.sigma = nn.Parameter(torch.Tensor(1))
 
         # TODO: Check if this should be initialize from another distribution.

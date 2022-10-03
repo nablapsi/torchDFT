@@ -2,7 +2,7 @@ import torch
 from torch.testing import assert_allclose
 
 from torchdft.density import Density
-from torchdft.grid import Uniform1DGrid
+from torchdft.grid import RadialGrid, Uniform1DGrid
 from torchdft.gridbasis import GridBasis, get_hartree_potential
 from torchdft.nn_functionals import (
     Conv1dFunctionalNet,
@@ -10,6 +10,11 @@ from torchdft.nn_functionals import (
     GgaConv1dFunctionalNet,
     GlobalConvolutionalLayer,
     GlobalFunctionalNet,
+    NDVConvNet,
+    NDVNConvLogNet,
+    NDVNConvNet,
+    NDVNConvNetAlpha,
+    NDVNet,
     SigLayer,
 )
 from torchdft.utils import System, exp_coulomb, gaussian
@@ -17,22 +22,22 @@ from torchdft.utils import System, exp_coulomb, gaussian
 
 class TestSigLayer:
     grid = Uniform1DGrid(end=10, dx=1e0, reflection_symmetry=True)
-    density = gaussian(grid.grid, 0, 1)
+    density = gaussian(grid.grid, 0, 1)[None, :]
 
     def test_forward(self):
         layer = SigLayer(self.grid, exp_coulomb)
         xc_energy_density = torch.rand(self.grid.grid.shape)
 
-        _ = layer(self.density, xc_energy_density)
+        _ = layer(self.density[None, ...], xc_energy_density)
 
     def test_1e(self):
         layer = SigLayer(self.grid, exp_coulomb)
         xc_energy_density = torch.rand(self.grid.grid.shape)
 
-        out = layer(self.density, xc_energy_density)
+        out = layer(self.density[None, ...], xc_energy_density)
         V_H = get_hartree_potential(self.density, self.grid.grid, exp_coulomb)
 
-        assert_allclose(out.squeeze(), -5e-1 * V_H)
+        assert_allclose(out, -5e-1 * V_H)
 
 
 class TestGlobalConvolutionalLayer:
@@ -80,7 +85,7 @@ class TestConv1dPileLayers:
         density = torch.rand((1, 1, 10))
         out = layer(density)
 
-        assert list(out.shape) == [10]
+        assert list(out.shape) == [1, 10]
 
     def test_forward_batch(self):
         layer = Conv1dPileLayers(self.channels, self.kernels, negative_transform=True)
@@ -157,3 +162,28 @@ class TestGgaConv1dFunctionalNet:
         )
         density.grad = self.basis.get_density_gradient(density.value.diag_embed())
         _ = net(density)
+
+
+class TestRadialGlobalFunctionalNet:
+    grid = RadialGrid(end=10, dx=1e0)
+    density = Density(gaussian(grid.grid, 0, 1), grid.grid, grid.grid_weights)
+
+    def test_NDVNet(self):
+        net = NDVNet()
+        _ = net(self.density)
+
+    def test_NDVConvNet(self):
+        net = NDVConvNet()
+        _ = net(self.density)
+
+    def test_NDVNConvNet(self):
+        net = NDVNConvNet()
+        _ = net(self.density)
+
+    def test_NDVNConvLogNet(self):
+        net = NDVNConvLogNet()
+        _ = net(self.density)
+
+    def test_NDVNConvNetAlpha(self):
+        net = NDVNConvNetAlpha()
+        _ = net(self.density)
