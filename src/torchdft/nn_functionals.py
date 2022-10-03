@@ -31,10 +31,9 @@ class SigLayer(nn.Module):
         nn.init.uniform_(self.sigma)
 
     def forward(self, density: Tensor, xc_energy_density: Tensor) -> Tensor:
-        density = density.squeeze()
-        if not hasattr(self, "Ne"):
-            self.Ne = density.detach().sum(-1) * self.dx
-        beta = (-(((self.Ne - 1) / self.sigma) ** 2)).exp()[:, None]
+        density = density.squeeze(-2)
+        Ne = density.detach().sum(-1) * self.dx
+        beta = (-(((Ne - 1) / self.sigma) ** 2)).exp()[:, None]
         V_H = get_hartree_potential(density, self.grid, self.interaction_fn)
         return xc_energy_density * (1 - beta) - 5e-1 * V_H * beta
 
@@ -111,7 +110,7 @@ class Conv1dPileLayers(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv(x)
-        return (self.sign * x).squeeze()
+        return self.sign * x.squeeze(-2)
 
 
 class Conv1dFunctionalNet(Functional):
