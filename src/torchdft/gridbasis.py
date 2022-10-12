@@ -1,7 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Callable, Dict, Tuple, Union
+from functools import partial
+from typing import Any, Callable, Dict, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -27,12 +28,13 @@ class GridBasis(Basis):
         interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
         non_interacting: bool = False,
         reflection_symmetry: bool = False,
+        **interaction_fn_kwargs: Any,
     ):
         super().__init__()
         self.non_interacting = non_interacting
         self.reflection_symmetry = reflection_symmetry
         self.system = system
-        self.interaction_fn = interaction_fn
+        self.interaction_fn = partial(interaction_fn, **interaction_fn_kwargs)
         self.register_buffer("grid", grid.grid)
         self.register_buffer("grid_weights", grid.grid_weights)
         self.register_buffer("dv", grid.dv)
@@ -42,7 +44,7 @@ class GridBasis(Basis):
             "E_nuc",
             (
                 (system.Z[..., None, :] * system.Z[..., None])
-                * interaction_fn(
+                * self.interaction_fn(
                     system.centers[..., None, :] - system.centers[..., None]
                 )
             )
@@ -93,7 +95,11 @@ class GridBasis(Basis):
             V_H = P.new_zeros(1)
         else:
             V_H = (
-                get_hartree_potential(density.value, self.grid, self.interaction_fn)
+                get_hartree_potential(
+                    density.value,
+                    self.grid,
+                    self.interaction_fn,
+                )
             ).diag_embed()
         eps_func = functional(density)
         if functional.per_electron:
