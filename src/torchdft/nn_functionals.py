@@ -270,7 +270,6 @@ class NDVNet(Functional):
 
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
-        self.transfer = nn.SiLU()
 
         self.mlp = nn.Sequential(
             nn.Linear(2, 60),
@@ -299,7 +298,6 @@ class NDVConvNet(Functional):
 
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
-        self.transfer = nn.SiLU()
         self.alpha = alpha
 
         self.mlp = nn.Sequential(
@@ -343,7 +341,6 @@ class NDVNConvNet(Functional):
 
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
-        self.transfer = nn.SiLU()
         self.N = N
         self.register_buffer(
             "alpha", torch.logspace(minN, maxN, self.N), persistent=False
@@ -392,7 +389,6 @@ class NDVNConvLogNet(Functional):
 
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
-        self.transfer = nn.SiLU()
         self.N = N
         self.register_buffer(
             "alpha", torch.logspace(minN, maxN, self.N), persistent=False
@@ -436,7 +432,6 @@ class NDVNConvNetAlpha(Functional):
 
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
-        self.transfer = nn.SiLU()
         self.N = N
         self.xi = nn.Parameter(torch.Tensor(self.N))
         nn.init.uniform_(self.xi, a=-2.0, b=2.0)
