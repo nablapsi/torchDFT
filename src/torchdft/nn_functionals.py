@@ -512,3 +512,47 @@ class NDVNConvNetGrid(Functional):
         x = torch.cat((n[..., None], glob), -1)
         x = self.mlp(x)
         return self.sign * x.squeeze(-1)
+
+
+class NDVNConvNetAlphaGrid(Functional):
+    """KEF with [n, conv(n)] features with trainable convolution."""
+
+    alpha: Tensor
+
+    def __init__(self, N: int = 2, negative_transform: bool = False) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+        self.N = N
+        self.xi = nn.Parameter(torch.Tensor(self.N))
+        nn.init.uniform_(self.xi, a=-2.0, b=2.0)
+        self.maxval = -1
+        self.minval = 3
+
+        self.mlp = nn.Sequential(
+            nn.Linear(self.N + 1, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def convolution(self, den: Density) -> Tensor:
+        alpha = self.minval + (self.maxval - self.minval) * torch.sigmoid(self.xi)
+        alpha = 10**-alpha
+        g = (den.grid[..., :, None] - den.grid[..., None, :]) ** 2
+        expo = (-0.5 * g[..., :, :, None] / alpha[None, None, :]).exp() / (
+            2e0 * math.pi * alpha[None, None, :]
+        ).sqrt()
+        return torch.einsum("...ijk, ...j-> ...ik", expo, den.value * den.grid_weights)
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.value
+        glob = self.convolution(den)
+        x = torch.cat((n[..., None], glob), -1)
+        x = self.mlp(x)
+        return self.sign * x.squeeze(-1)
