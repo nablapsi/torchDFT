@@ -30,7 +30,7 @@ class RadialBasis(Basis):
         self.register_buffer("dv", grid.dv)
         self.register_buffer("grid_weights", grid.grid_weights)
         self.register_buffer("Z", self.system.Z.squeeze(-1))
-        self.register_buffer("E_nuc", self.Z.new_zeros(self.Z.shape))
+        self.register_buffer("E_nuc", torch.zeros_like(self.Z))
         self.register_buffer("T", -5e-1 * self.get_laplacian())
         self.register_buffer("V_ext", (-self.system.Z / self.grid).diag_embed())
         self.register_buffer("S", self.grid.new_ones(self.grid.size()).diag_embed())
