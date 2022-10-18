@@ -22,20 +22,20 @@ from torchdft.utils import System, exp_coulomb, gaussian
 
 class TestSigLayer:
     grid = Uniform1DGrid(end=10, dx=1e0, reflection_symmetry=True)
-    density = gaussian(grid.grid, 0, 1)[None, :]
+    density = gaussian(grid.nodes, 0, 1)[None, :]
 
     def test_forward(self):
         layer = SigLayer(self.grid, exp_coulomb)
-        xc_energy_density = torch.rand(self.grid.grid.shape)
+        xc_energy_density = torch.rand(self.grid.nodes.shape)
 
         _ = layer(self.density[None, ...], xc_energy_density)
 
     def test_1e(self):
         layer = SigLayer(self.grid, exp_coulomb)
-        xc_energy_density = torch.rand(self.grid.grid.shape)
+        xc_energy_density = torch.rand(self.grid.nodes.shape)
 
         out = layer(self.density[None, ...], xc_energy_density)
-        V_H = get_hartree_potential(self.density, self.grid.grid, exp_coulomb)
+        V_H = get_hartree_potential(self.density, self.grid.nodes, exp_coulomb)
 
         assert_allclose(out, -5e-1 * V_H)
 
@@ -43,7 +43,7 @@ class TestSigLayer:
 class TestGlobalConvolutionalLayer:
     def test_forward(self):
         grid = Uniform1DGrid(end=10, dx=1e0, reflection_symmetry=True)
-        nbatch, ngrid, nchannels = 2, grid.grid.shape[0], 4
+        nbatch, ngrid, nchannels = 2, grid.nodes.shape[0], 4
         density = torch.rand(nbatch, 1, ngrid)
 
         gconvlayer = GlobalConvolutionalLayer(nchannels, grid)
@@ -112,7 +112,7 @@ class TestConv1dFunctionalNet:
 
 class TestGlobalFunctionalNet:
     grid = Uniform1DGrid(end=10, dx=1e0, reflection_symmetry=True)
-    density = Density(gaussian(grid.grid, 0, 1), grid.grid, grid.grid_weights)
+    density = Density(gaussian(grid.nodes, 0, 1), grid.nodes, grid.grid_weights)
 
     def test_forward(self):
         net = GlobalFunctionalNet(
@@ -156,8 +156,8 @@ class TestGgaConv1dFunctionalNet:
     def test_forward(self):
         net = GgaConv1dFunctionalNet(channels=[2, 16, 16, 1], negative_transform=True)
         density = Density(
-            torch.rand((3, self.grid.grid.shape[0])),
-            self.grid.grid,
+            torch.rand((3, self.grid.nodes.shape[0])),
+            self.grid.nodes,
             self.grid.grid_weights,
         )
         density.grad = self.basis.get_density_gradient(density.value.diag_embed())
@@ -166,7 +166,7 @@ class TestGgaConv1dFunctionalNet:
 
 class TestRadialGlobalFunctionalNet:
     grid = RadialGrid(end=10, dx=1e0)
-    density = Density(gaussian(grid.grid, 0, 1), grid.grid, grid.grid_weights)
+    density = Density(gaussian(grid.nodes, 0, 1), grid.nodes, grid.grid_weights)
 
     def test_NDVNet(self):
         net = NDVNet()

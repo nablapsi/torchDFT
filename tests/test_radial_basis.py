@@ -12,8 +12,10 @@ class TestFunctionals:
         grid = RadialGrid(end=5, dx=1e-2)
         system = System(centers=torch.tensor([0]), Z=torch.tensor([1]))
         basis = RadialBasis(system, grid)
-        density = gaussian(grid.grid, mean, std)
-        den_der = basis.get_density_gradient((density * basis.dvdx).diag_embed())
+        density = gaussian(grid.nodes, mean, std)
+        den_der = basis.get_density_gradient(
+            (density * basis.dv * basis.grid_weights[..., None]).diag_embed()
+        )
         assert_allclose(
-            den_der, -(grid.grid - mean) / std * density, atol=1e-5, rtol=1e-4
+            den_der, -(grid.nodes - mean) / std * density, atol=1e-5, rtol=1e-4
         )

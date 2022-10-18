@@ -21,7 +21,7 @@ class SigLayer(nn.Module):
 
     def __init__(self, grid: Grid, interaction_fn: Callable[[Tensor], Tensor]):
         super().__init__()
-        self.grid = grid.grid
+        self.grid = grid.nodes
         self.interaction_fn = interaction_fn
         self.dx = grid.grid_weights
         self.sigma = nn.Parameter(torch.Tensor(1))
@@ -49,7 +49,7 @@ class GlobalConvolutionalLayer(nn.Module):
         super().__init__()
         self.channels = channels
         self.register_buffer(
-            "g", (grid.grid[:, None] - grid.grid) ** 2, persistent=False
+            "g", (grid.nodes[:, None] - grid.nodes) ** 2, persistent=False
         )
         self.register_buffer("grid_weights", grid.grid_weights, persistent=False)
         self.maxval = maxval

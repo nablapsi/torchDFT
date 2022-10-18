@@ -35,7 +35,7 @@ class GridBasis(Basis):
         self.reflection_symmetry = reflection_symmetry
         self.system = system
         self.interaction_fn = partial(interaction_fn, **interaction_fn_kwargs)
-        self.register_buffer("grid", grid.grid)
+        self.register_buffer("grid", grid.nodes)
         self.register_buffer("grid_weights", grid.grid_weights)
         self.register_buffer("dv", grid.dv)
         self.register_buffer("centers", self.system.centers)

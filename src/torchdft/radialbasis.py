@@ -26,7 +26,9 @@ class RadialBasis(Basis):
         self.system = system
         # In most cases grid is dividing.
         # It is more convenient to change the zeros to infinity.
-        self.register_buffer("grid", torch.where(grid.grid == 0, torch.inf, grid.grid))
+        self.register_buffer(
+            "grid", torch.where(grid.nodes == 0, torch.inf, grid.nodes)
+        )
         self.register_buffer("dv", grid.dv)
         self.register_buffer("grid_weights", grid.grid_weights)
         self.register_buffer("Z", self.system.Z.squeeze(-1))

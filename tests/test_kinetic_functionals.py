@@ -27,7 +27,7 @@ class TestKineticFunctionals:
             Z=torch.tensor([1]),
         )
         basis = GridBasis(system, grid)
-        density = Density(gaussian(grid.grid, 0, 1), grid.grid, grid.grid_weights)
+        density = Density(gaussian(grid.nodes, 0, 1), grid.nodes, grid.grid_weights)
         density.grad = basis.get_density_gradient(
             (density.value * basis.grid_weights).diag_embed()
         )

@@ -9,13 +9,14 @@ from torch import Tensor, nn
 
 class Grid(nn.Module):
     """Base class representing a grid.
+
     Attributes:
-        grid: Tensor holding the grid coordinates.
+        nodes: Tensor holding the grid coordinates.
         grid_weights: Tensor holding the integration weights of grid.
         dv: Volume element. 1 for cartesian grids. 4 pi r^2 for radial grid.
     """
 
-    grid: Tensor
+    nodes: Tensor
     grid_weights: Tensor
     dv: Tensor
 
@@ -30,10 +31,10 @@ class Uniform1DGrid(Grid):
         start: float = 0e0,
         reflection_symmetry: bool = False,
     ):
-        self.grid = torch.arange(start, end + dx, dx)
+        self.nodes = torch.arange(start, end + dx, dx)
         if reflection_symmetry:
             assert start == 0e0
-            self.grid = torch.cat((-self.grid[1:].flip(-1), self.grid))
+            self.nodes = torch.cat((-self.nodes[1:].flip(-1), self.nodes))
         self.grid_weights = torch.tensor(dx)
         self.dv = torch.tensor(1.0)
 
@@ -46,9 +47,9 @@ class RadialGrid(Grid):
         end: float,
         dx: float,
     ):
-        self.grid = torch.arange(dx, end + dx, dx)
+        self.nodes = torch.arange(dx, end + dx, dx)
         self.grid_weights = torch.tensor(dx)
-        self.dv = 4 * torch.pi * self.grid**2
+        self.dv = 4 * torch.pi * self.nodes**2
 
 
 class GridBatch(Grid):
@@ -56,7 +57,7 @@ class GridBatch(Grid):
 
     def __init__(self, grid_list: List[Grid]):
         n_grids = len(grid_list)
-        max_grid_len = max([len(grid.grid) for grid in grid_list])
+        max_grid_len = max([len(grid.nodes) for grid in grid_list])
         if grid_list[0].grid_weights.shape:
             max_gridw_len = max([len(grid.grid_weights) for grid in grid_list])
         else:
@@ -65,14 +66,14 @@ class GridBatch(Grid):
             max_dv_len = max([len(grid.dv) for grid in grid_list])
         else:
             max_dv_len = 1
-        self.grid = grid_list[0].grid.new_zeros(n_grids, max_grid_len)
-        self.grid_weights = grid_list[0].grid.new_zeros(n_grids, max_gridw_len)
-        self.dv = grid_list[0].grid.new_zeros(n_grids, max_dv_len)
+        self.nodes = grid_list[0].nodes.new_zeros(n_grids, max_grid_len)
+        self.grid_weights = grid_list[0].nodes.new_zeros(n_grids, max_gridw_len)
+        self.dv = grid_list[0].nodes.new_zeros(n_grids, max_dv_len)
         for i, g in enumerate(grid_list):
-            maxg = g.grid.shape[0]
+            maxg = g.nodes.shape[0]
             maxgw = max_gridw_len if max_gridw_len == 1 else g.grid_weights.shape[0]
             maxdv = max_dv_len if max_dv_len == 1 else g.dv.shape[0]
-            self.grid[i, :maxg] = g.grid
+            self.nodes[i, :maxg] = g.nodes
             self.grid_weights[i, :maxgw] = g.grid_weights
             self.dv[i, :maxdv] = g.dv
         self.grid_weights = self.grid_weights.squeeze(-1)
