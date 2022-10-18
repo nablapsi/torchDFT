@@ -25,8 +25,8 @@ class SCFSolution:
     E: Tensor
     P: Tensor
     niter: Tensor
+    acc_orbital_energy: Tensor
     orbital_energy: Tensor
-    epsilon: Tensor
     C: Tensor
     converged: Tensor
 
@@ -71,10 +71,10 @@ class SCFSolver(ABC):
         if self.mixer in {"pulay", "pulaydensity"}:
             self.diis = DIIS(**(mixer_kwargs or {}))
         self.S_or_X = self.S if self.use_xitorch else GeneralizedDiagonalizer(self.S).X
-        P_in, energy_prev, epsilon, C = self.get_init_guess(P_guess)
+        P_in, energy_prev, orbital_energy, C = self.get_init_guess(P_guess)
         for i in iterations or range(max_iterations):
             F, V_H, V_func, E_func = self.build_fock_matrix(P_in, self.mixer)
-            P_out, energy_orb, epsilon, C = self.ks_iteration(
+            P_out, acc_orbital_energy, orbital_energy, C = self.ks_iteration(
                 F,
                 self.S_or_X,
                 self.occ,
@@ -82,7 +82,9 @@ class SCFSolver(ABC):
             density_diff, converged = self.check_convergence(
                 P_in, P_out, density_threshold
             )
-            energy = self.get_total_energy(P_in, V_H, V_func, E_func, energy_orb)
+            energy = self.get_total_energy(
+                P_in, V_H, V_func, E_func, acc_orbital_energy
+            )
             if tape is not None:
                 tape.append((P_out, energy))
             if (
@@ -111,8 +113,8 @@ class SCFSolver(ABC):
                     E=energy,
                     P=P_out,
                     niter=torch.tensor(i + 1),
-                    orbital_energy=energy_orb,
-                    epsilon=epsilon,
+                    acc_orbital_energy=acc_orbital_energy,
+                    orbital_energy=orbital_energy,
                     C=C,
                     converged=density_diff < density_threshold,
                 )
@@ -121,8 +123,8 @@ class SCFSolver(ABC):
             E=energy,
             P=P_out,
             niter=torch.tensor(i + 1),
-            orbital_energy=energy_orb,
-            epsilon=epsilon,
+            acc_orbital_energy=acc_orbital_energy,
+            orbital_energy=orbital_energy,
             C=C,
             converged=density_diff < density_threshold,
         )
@@ -131,11 +133,11 @@ class SCFSolver(ABC):
         n_occ = self.occ.shape[-1]
         if self.use_xitorch:
             F, S = (xitorch.LinearOperator.m(x, is_hermitian=True) for x in [F, S])
-            epsilon, C = xitorch.linalg.symeig(F, n_occ, "lowest", S)
+            orbital_energy, C = xitorch.linalg.symeig(F, n_occ, "lowest", S)
         else:
-            epsilon, C = GeneralizedDiagonalizer.eigh(F, S)
-            epsilon, C = epsilon[..., :n_occ], C[..., :n_occ]
-        return epsilon, C
+            orbital_energy, C = GeneralizedDiagonalizer.eigh(F, S)
+            orbital_energy, C = orbital_energy[..., :n_occ], C[..., :n_occ]
+        return orbital_energy, C
 
     def ks_iteration(
         self, F: Tensor, S: Tensor, occ: Tensor
@@ -149,23 +151,25 @@ class SCFSolver(ABC):
             occ: Tensor. Shape = [batch, (s), (l), orbitals].
         Returns:
             P: Tensor. Shape = [batch, (s), basis, basis]
-            energy_orb: Tensor. Shape = [batch]
-            epsilon: Tensor. Shape = [batch, (s), (l), orbitals]
+            acc_orbital_energy: Tensor. Shape = [batch]
+            orbital_energy: Tensor. Shape = [batch, (s), (l), orbitals]
             C: Tensor. Shape = [batch, (s), (l), orbitals, basis]
 
         () => this dimension may not be always present.
         s = spin dimension.
         l = extra Fock matric dimension.
         """
-        epsilon, C = self.eig(F, S)
+        orbital_energy, C = self.eig(F, S)
         P = (C * occ[..., None, :]) @ C.transpose(
             -2, -1
         )  # shape = [batch, (s), (l), basis, basis]
-        energy_orb = (epsilon * occ).sum(dim=-1)  # shape = [batch, (s), (l)]
+        acc_orbital_energy = (orbital_energy * occ).sum(
+            dim=-1
+        )  # shape = [batch, (s), (l)]
         if self.extra_fock_channel:
             P = P.sum(-3)
-            energy_orb = energy_orb.sum(-1)
-        return P, energy_orb, epsilon, C.transpose(-2, -1)
+            acc_orbital_energy = acc_orbital_energy.sum(-1)
+        return P, acc_orbital_energy, orbital_energy, C.transpose(-2, -1)
 
     def asserts(self) -> None:
         pass
@@ -189,7 +193,7 @@ class SCFSolver(ABC):
         V_H: Tensor,
         V_func: Tensor,
         E_func: Tensor,
-        energy_orb: Tensor,
+        acc_orbital_energy: Tensor,
     ) -> Tensor:
         pass
 
@@ -234,10 +238,10 @@ class RKS(SCFSolver):
         V_H: Tensor,
         V_func: Tensor,
         E_func: Tensor,
-        energy_orb: Tensor,
+        acc_orbital_energy: Tensor,
     ) -> Tensor:
         return (
-            energy_orb
+            acc_orbital_energy
             + E_func
             - ((V_H / 2 + V_func).squeeze() * P_in).sum((-2, -1))
             + self.basis.E_nuc
@@ -281,11 +285,13 @@ class UKS(SCFSolver):
         else:
             F = self.T + self.V_ext
             F = torch.stack((F, F), 1)
-            P, orbital_energy, epsilon, C = self.ks_iteration(F, self.S_or_X, self.occ)
+            P, acc_orbital_energy, orbital_energy, C = self.ks_iteration(
+                F, self.S_or_X, self.occ
+            )
             return (
                 P,
-                orbital_energy.sum(-1),
-                epsilon,
+                acc_orbital_energy.sum(-1),
+                orbital_energy,
                 C,
             )
 
@@ -308,10 +314,10 @@ class UKS(SCFSolver):
         V_H: Tensor,
         V_func: Tensor,
         E_func: Tensor,
-        energy_orb: Tensor,
+        acc_orbital_energy: Tensor,
     ) -> Tensor:
         energy = (
-            energy_orb.sum(-1)
+            acc_orbital_energy.sum(-1)
             + E_func
             - ((V_H / 2 + V_func).squeeze() * P_in).sum((-3, -2, -1))
             + self.basis.E_nuc
@@ -341,13 +347,13 @@ class ROKS(SCFSolver):
                 torch.tensor(0.0),
             )
         else:
-            P_guess, orbital_energy, epsilon, C = self.ks_iteration(
+            P_guess, acc_orbital_energy, orbital_energy, C = self.ks_iteration(
                 self.T + self.V_ext, self.S_or_X, self.occ
             )
             return (
                 P_guess,
-                orbital_energy.sum(-1),
-                epsilon,
+                acc_orbital_energy.sum(-1),
+                orbital_energy,
                 C,
             )
 
@@ -411,10 +417,10 @@ class ROKS(SCFSolver):
         V_H: Tensor,
         V_func: Tensor,
         E_func: Tensor,
-        energy_orb: Tensor,
+        acc_orbital_energy: Tensor,
     ) -> Tensor:
         energy = (
-            energy_orb.sum(-1)
+            acc_orbital_energy.sum(-1)
             + E_func
             - ((V_H / 2 + V_func).squeeze() * P_in).sum((-3, -2, -1))
             + self.basis.E_nuc
