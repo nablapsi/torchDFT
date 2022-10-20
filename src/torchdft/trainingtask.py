@@ -453,6 +453,7 @@ class SCFTrainingTask(TrainingTask):
         except SCFNotConvergedError as e:
             sol = e.sol
             metrics = {"SCF/iter": sol.niter}
+        metrics["SCF/converged"] = sol.converged.sum()
         density_pred = basis.density(sol.P)
         density_true = basis.density(data.P)
         N = occ.sum(dim=-1)
