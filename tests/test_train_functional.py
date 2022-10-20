@@ -17,10 +17,10 @@ torch.set_default_dtype(torch.double)
 
 class TestTrainScf:
     Z = torch.tensor([[1, 0, 1], [1, 1, 1]])
-    centers = torch.tensor([[-1, 0, 1], [1, 0, 1]])
+    centers = torch.tensor([[-1, 0, 1], [-1, 0, 1]])
     system_list = [System(Z=Zi, centers=ci) for (Zi, ci) in zip(Z, centers)]
     system = SystemBatch(system_list)
-    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
+    grid = Uniform1DGrid(end=10, dx=0.5, reflection_symmetry=True)
     E_truth = torch.rand(Z.shape[0])
     D_truth = torch.rand((Z.shape[0], grid.nodes.shape[0], grid.nodes.shape[0]))
 
@@ -54,7 +54,7 @@ class TestTrainScf:
         ),
     ]
 
-    basis = GridBasis(system, grid)
+    basis = GridBasis(system, grid, reflection_symmetry=True)
 
     def test_train_scf_linear(self):
 
@@ -67,7 +67,7 @@ class TestTrainScf:
                 RKS,
                 steps=1,
                 mixer="linear",
-                max_iterations=2,
+                max_iterations=20,
             )
             task.fit("run/test", device="cpu")
         shutil.rmtree("run")
@@ -83,7 +83,7 @@ class TestTrainScf:
                 RKS,
                 steps=1,
                 mixer="pulay",
-                max_iterations=2,
+                max_iterations=20,
             )
             task.fit("run/test", device="cpu")
         shutil.rmtree("run")
@@ -99,7 +99,7 @@ class TestTrainScf:
                 RKS,
                 steps=1,
                 mixer="pulay",
-                max_iterations=2,
+                max_iterations=20,
             )
             task.fit("run/test", device="cpu", with_adam=True, loss_threshold=0.0)
         shutil.rmtree("run")
@@ -115,7 +115,7 @@ class TestTrainScf:
                 RKS,
                 steps=1,
                 mixer="pulay",
-                max_iterations=2,
+                max_iterations=20,
             )
             task.fit("run/test", device="cpu")
         shutil.rmtree("run")
@@ -131,7 +131,7 @@ class TestTrainScf:
                 RKS,
                 steps=1,
                 mixer="pulay",
-                max_iterations=2,
+                max_iterations=20,
             )
             task.fit(
                 "run/test",
@@ -169,7 +169,7 @@ def test_radial_scfmetrics():
         occ=system.occ("OF,RKS"),
         data=ref_data,
         functional=LdaPw92(),
-        solver=RKS,
+        make_solver=RKS,
         steps=10,
         mixer="pulaydensity",
         density_threshold=1e-9,
@@ -201,7 +201,7 @@ def test_radial_gradmetrics():
         occ=system.occ("OF,RKS"),
         data=ref_data,
         functional=LdaPw92(),
-        solver=RKS,
+        make_solver=RKS,
         steps=10,
         l=1e0,
     )
@@ -236,7 +236,7 @@ def test_batchradial_scfmetrics():
         occ=system.occ("OF,RKS"),
         data=ref_data,
         functional=LdaPw92(),
-        solver=RKS,
+        make_solver=RKS,
         steps=10,
         mixer="pulaydensity",
         density_threshold=1e-9,
@@ -272,7 +272,7 @@ def test_batchradial_gradmetrics():
         occ=system.occ("OF,RKS"),
         data=ref_data,
         functional=LdaPw92(),
-        solver=RKS,
+        make_solver=RKS,
         steps=10,
         l=1e0,
     )
@@ -302,7 +302,7 @@ def test_grid_scfmetrics():
         occ=system.occ("OF,RKS"),
         data=ref_data,
         functional=Lda1d(),
-        solver=RKS,
+        make_solver=RKS,
         steps=10,
         mixer="pulaydensity",
         density_threshold=1e-9,
@@ -333,7 +333,7 @@ def test_grid_gradmetrics():
         occ=system.occ("OF,RKS"),
         data=ref_data,
         functional=Lda1d(),
-        solver=RKS,
+        make_solver=RKS,
         steps=10,
         l=1e0,
     )
@@ -368,7 +368,7 @@ def test_batchgrid_scfmetrics():
         occ=system.occ("OF,RKS"),
         data=ref_data,
         functional=Lda1d(),
-        solver=RKS,
+        make_solver=RKS,
         steps=10,
         mixer="pulaydensity",
         density_threshold=1e-9,
@@ -404,7 +404,7 @@ def test_batchgrid_gradmetrics():
         occ=system.occ("OF,RKS"),
         data=ref_data,
         functional=Lda1d(),
-        solver=RKS,
+        make_solver=RKS,
         steps=10,
         l=1e0,
     )
