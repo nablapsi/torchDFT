@@ -115,7 +115,7 @@ class TestTrainScf:
                 RKS,
                 steps=1,
                 mixer="pulay",
-                max_iterations=20,
+                max_iterations=100,
             )
             task.fit("run/test", device="cpu")
         shutil.rmtree("run")
@@ -131,7 +131,7 @@ class TestTrainScf:
                 RKS,
                 steps=1,
                 mixer="pulay",
-                max_iterations=20,
+                max_iterations=100,
             )
             task.fit(
                 "run/test",
@@ -174,7 +174,7 @@ def test_radial_scfmetrics():
         mixer="pulaydensity",
         density_threshold=1e-9,
     )
-    metrics = task.metrics_fn(task.basis, task.occ, task.data)
+    metrics = task.metrics_fn(task.data)
     assert_allclose(metrics["loss"], 0e0)
 
 
@@ -241,7 +241,7 @@ def test_batchradial_scfmetrics():
         mixer="pulaydensity",
         density_threshold=1e-9,
     )
-    metrics = task.metrics_fn(task.basis, task.occ, task.data)
+    metrics = task.metrics_fn(task.data)
     assert_allclose(metrics["loss"], 0e0)
 
 
@@ -307,7 +307,7 @@ def test_grid_scfmetrics():
         mixer="pulaydensity",
         density_threshold=1e-9,
     )
-    metrics = task.metrics_fn(task.basis, task.occ, task.data)
+    metrics = task.metrics_fn(task.data)
     assert_allclose(metrics["loss"], 0e0)
 
 
@@ -373,7 +373,7 @@ def test_batchgrid_scfmetrics():
         mixer="pulaydensity",
         density_threshold=1e-9,
     )
-    metrics = task.metrics_fn(task.basis, task.occ, task.data)
+    metrics = task.metrics_fn(task.data)
     assert_allclose(metrics["loss"], 0e0)
 
 

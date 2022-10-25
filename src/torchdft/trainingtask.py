@@ -192,8 +192,18 @@ class TrainingTask(nn.Module, ABC):
         return basis, occ, data, samples
 
     @abstractmethod
-    def training_step(self, data: Union[SCFData, GradTTData]) -> Metrics:
+    def metrics_fn(self, data: Union[SCFData, GradTTData]) -> Metrics:
         pass
+
+    def training_step(self, data: Union[SCFData, GradTTData]) -> Metrics:
+        """Execute a training step."""
+        assert self.training
+        metrics = self.metrics_fn(data)
+        # Evaluate (d RMSE / d theta) from (d MSE / d theta)
+        for p in self.functional.parameters():
+            p.grad = p.grad / (2.0 * metrics["loss"])
+        assert not any(v.grad_fn for v in metrics.values())
+        return metrics
 
     def validation_eval(
         self, basis: Basis, occ: Tensor, data: SCFData, **kwargs: Any
@@ -421,9 +431,7 @@ class SCFTrainingTask(TrainingTask):
 
     def metrics_fn(
         self,
-        basis: Basis,
-        occ: Tensor,
-        data: SCFData,
+        data: Union[SCFData, GradTTData],
     ) -> Metrics:
         """Evaluate model provided a basis and orbital occupation numbers.
 
@@ -435,7 +443,8 @@ class SCFTrainingTask(TrainingTask):
 
         Ref. Deep Equilibrium Models, arXiv:1909.01377
         """
-        solver = self.make_solver(basis, occ, self.functional)
+        assert type(data) == SCFData
+        solver = self.make_solver(self.basis, self.occ, self.functional)
         try:
             sol_guess = solver.solve(
                 create_graph=self.training,
@@ -454,12 +463,12 @@ class SCFTrainingTask(TrainingTask):
             sol = e.sol
             metrics = {"SCF/iter": sol.niter}
         metrics["SCF/converged"] = sol.converged.sum()
-        density_pred = basis.density(sol.P)
-        density_true = basis.density(data.P)
-        N = occ.sum(dim=-1)
+        density_pred = self.basis.density(sol.P)
+        density_true = self.basis.density(data.P)
+        N = self.occ.sum(dim=-1)
         energy_loss_sq = (((sol.E - data.energy) ** 2 / N)[sol.converged]).mean()
         density_loss_sq = (
-            ((basis.density_mse(density_pred - density_true)) / N)[sol.converged]
+            ((self.basis.density_mse(density_pred - density_true)) / N)[sol.converged]
         ).mean()
         loss_sq = energy_loss_sq + density_loss_sq
         if self.training:
@@ -467,17 +476,6 @@ class SCFTrainingTask(TrainingTask):
         metrics["loss"] = loss_sq.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/regularization"] = density_loss_sq.detach().sqrt()
-        return metrics
-
-    def training_step(self, data: Union[SCFData, GradTTData]) -> Metrics:
-        """Execute a training step."""
-        assert self.training
-        assert type(data) == SCFData
-        metrics = self.metrics_fn(self.basis, self.occ, data)
-        # Evaluate (d RMSE / d theta) from (d MSE / d theta)
-        for p in self.functional.parameters():
-            p.grad = p.grad / (2.0 * metrics["loss"])
-        assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
 
@@ -557,7 +555,8 @@ class GradientTrainingTask(TrainingTask):
             train_samples,
         )
 
-    def metrics_fn(self, data: GradTTData) -> Metrics:
+    def metrics_fn(self, data: Union[SCFData, GradTTData]) -> Metrics:
+        assert type(data) == GradTTData
         n = data.n.detach().requires_grad_()
         self.density = Density(
             n,
@@ -603,15 +602,4 @@ class GradientTrainingTask(TrainingTask):
         metrics["loss"] = loss_sq.detach().sqrt()
         metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
         metrics["loss/regularization"] = regularization_sq.detach().sqrt()
-        return metrics
-
-    def training_step(self, data: Union[SCFData, GradTTData]) -> Metrics:
-        """Execute a training step."""
-        assert self.training
-        assert type(data) == GradTTData
-        metrics = self.metrics_fn(data)
-        # Evaluate (d RMSE / d theta) from (d MSE / d theta)
-        for p in self.functional.parameters():
-            p.grad = p.grad / (2.0 * metrics["loss"])
-        assert not any(v.grad_fn for v in metrics.values())
         return metrics
