@@ -16,6 +16,7 @@ torch.set_default_dtype(torch.double)
 
 
 class TestTrainScf:
+    torch.manual_seed(208934078)
     Z = torch.tensor([[1, 0, 1], [1, 1, 1]])
     centers = torch.tensor([[-1, 0, 1], [-1, 0, 1]])
     system_list = [System(Z=Zi, centers=ci) for (Zi, ci) in zip(Z, centers)]
