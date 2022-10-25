@@ -35,8 +35,8 @@ class Uniform1DGrid(Grid):
         if reflection_symmetry:
             assert start == 0e0
             self.nodes = torch.cat((-self.nodes[1:].flip(-1), self.nodes))
-        self.grid_weights = torch.tensor(dx)
-        self.dv = torch.tensor(1.0)
+        self.grid_weights = torch.tensor([dx])
+        self.dv = torch.tensor([1.0])
 
 
 class RadialGrid(Grid):
@@ -48,7 +48,7 @@ class RadialGrid(Grid):
         dx: float,
     ):
         self.nodes = torch.arange(dx, end + dx, dx)
-        self.grid_weights = torch.tensor(dx)
+        self.grid_weights = torch.tensor([dx])
         self.dv = 4 * torch.pi * self.nodes**2
 
 
@@ -58,14 +58,8 @@ class GridBatch(Grid):
     def __init__(self, grid_list: List[Grid]):
         n_grids = len(grid_list)
         max_grid_len = max([len(grid.nodes) for grid in grid_list])
-        if grid_list[0].grid_weights.shape:
-            max_gridw_len = max([len(grid.grid_weights) for grid in grid_list])
-        else:
-            max_gridw_len = 1
-        if grid_list[0].dv.shape:
-            max_dv_len = max([len(grid.dv) for grid in grid_list])
-        else:
-            max_dv_len = 1
+        max_gridw_len = max([len(grid.grid_weights) for grid in grid_list])
+        max_dv_len = max([len(grid.dv) for grid in grid_list])
         self.nodes = grid_list[0].nodes.new_zeros(n_grids, max_grid_len)
         self.grid_weights = grid_list[0].nodes.new_zeros(n_grids, max_gridw_len)
         self.dv = grid_list[0].nodes.new_zeros(n_grids, max_dv_len)
