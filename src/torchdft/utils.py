@@ -30,6 +30,7 @@ class System:
         spin_treat = mode_spin.split(",")[1].strip()
         nalpha = (self.n_electrons + self.spin) // 2
         nbeta = nalpha - self.spin
+        assert nalpha + nbeta == self.n_electrons
         if mode == "KS":
             self.lmax = -1
             occ_a = self.centers.new_ones([nalpha])
