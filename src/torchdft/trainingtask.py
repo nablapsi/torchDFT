@@ -448,6 +448,7 @@ class SCFTrainingTask(TrainingTask):
         try:
             sol_guess = solver.solve(
                 create_graph=self.training,
+                P_guess=data.P,
                 **self.kwargs,
             )
             sol = solver.solve(
