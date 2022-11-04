@@ -556,3 +556,50 @@ class NDVNConvNetAlphaGrid(Functional):
         x = torch.cat((n[..., None], glob), -1)
         x = self.mlp(x)
         return self.sign * x.squeeze(-1)
+
+
+class NDVNConvNetLogGrid(Functional):
+    """KEF with [n, conv(n)] features."""
+
+    alpha: Tensor
+
+    def __init__(
+        self,
+        N: int = 2,
+        minN: float = -3.0,
+        maxN: float = -1.0,
+        negative_transform: bool = False,
+    ) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+        self.N = N
+        self.register_buffer(
+            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
+        )
+
+        self.mlp = nn.Sequential(
+            nn.Linear(self.N + 1, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def convolution(self, den: Density, alpha: Tensor) -> Tensor:
+        g = (den.grid[..., :, None] - den.grid[..., None, :]) ** 2
+        expo = (-0.5 * g[..., :, :, None] / alpha[None, None, :]).exp() / (
+            2e0 * math.pi * alpha[None, None, :]
+        ).sqrt()
+        return torch.einsum("...ijk, ...j-> ...ik", expo, den.value * den.grid_weights)
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.value
+        glob = self.convolution(den, self.alpha)
+        x = torch.cat(((n[..., None] + 1e-4).log(), glob), -1)
+        x = self.mlp(x)
+        return self.sign * x.squeeze(-1)
