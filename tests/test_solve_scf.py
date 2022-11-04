@@ -89,7 +89,7 @@ def test_batched_ks_iteration():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=charges, centers=centers)
+        system = System(Z=charges, centers=centers, spin=1)
         systems.append(system)
         gridbasis.append(GridBasis(system, grid))
 
