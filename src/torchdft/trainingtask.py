@@ -195,13 +195,18 @@ class TrainingTask(nn.Module, ABC):
     def metrics_fn(self, data: Union[SCFData, GradTTData]) -> Metrics:
         pass
 
-    def training_step(self, data: Union[SCFData, GradTTData]) -> Metrics:
+    def training_step(
+        self, data: Union[SCFData, GradTTData], opt: torch.optim.Optimizer = None
+    ) -> Metrics:
         """Execute a training step."""
         assert self.training
         metrics = self.metrics_fn(data)
         # Evaluate (d RMSE / d theta) from (d MSE / d theta)
         for p in self.functional.parameters():
             p.grad = p.grad / (2.0 * metrics["loss"])
+        if opt is not None:
+            opt.step()
+            opt.zero_grad()
         assert not any(v.grad_fn for v in metrics.values())
         return metrics
 
@@ -297,7 +302,7 @@ class TrainingTask(nn.Module, ABC):
                 if not self.minibatchsize:
                     metrics = self.training_step(self.data)
                 else:
-                    _metrics = [self.training_step(data) for data in dataloader]
+                    _metrics = [self.training_step(data, opt) for data in dataloader]
                     metrics = {
                         k: torch.stack([m[k] for m in _metrics]).mean()
                         for k in _metrics[0]
@@ -357,7 +362,8 @@ class TrainingTask(nn.Module, ABC):
                     loss = closure()
                     lr = opt.state_dict()["param_groups"][0]["lr"]
                     writer.add_scalar("learning_rate", lr, step)
-                    opt.step()
+                    if not self.minibatchsize:
+                        opt.step()
                     scheduler.step(loss)
                     if loss < loss_threshold:
                         break
