@@ -43,7 +43,6 @@ class SCFSolver(ABC):
         self.basis = basis
         self.occ = occ
         self.functional = functional
-        self.asserts()
 
     def solve(  # noqa: C901 TODO too complex
         self,
@@ -172,9 +171,6 @@ class SCFSolver(ABC):
             acc_orbital_energy = acc_orbital_energy.sum(-1)
         return P, acc_orbital_energy, orbital_energy, C.transpose(-2, -1)
 
-    def asserts(self) -> None:
-        pass
-
     @abstractmethod
     def get_init_guess(
         self, P_guess: Tensor = None
@@ -259,21 +255,6 @@ class RKS(SCFSolver):
         P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
         density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
         return density_diff, density_diff < density_threshold
-
-    def asserts(self) -> None:
-        # TODO: All the asserts are commented to allow KSDFT calculation on open shells.
-        #       This should not be allowed in the final version.
-        # if hasattr(self.basis, "system"):
-        #    if isinstance(self.basis.system, System):
-        #        assert self.basis.system.spin == 0
-
-        #    if isinstance(self.basis.system, SystemBatch):
-        #        assert (self.basis.system.spin == 0).all()
-
-        # if hasattr(self.basis, "mol"):
-        #    if isinstance(self.basis.mol, Mole):
-        #        assert self.basis.mol.spin == 0
-        pass
 
 
 class UKS(SCFSolver):
