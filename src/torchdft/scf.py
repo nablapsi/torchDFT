@@ -454,9 +454,9 @@ class DIIS:
     def _get_coeffs(self, X: Tensor, err: Tensor) -> Tensor:
         self.history.append((X, err))
         self.history = self.history[-self.max_history :]
-        nb, N = X.shape[:-2], len(self.history)
+        nb, N = X.shape[0], len(self.history)
         if N == 1:
-            return X.new_ones((*nb, 1))
+            return X.new_ones((nb, 1))
         err = torch.stack([e for _, e in self.history], dim=-2)
         derr = err.diff(dim=-2)
         B = torch.einsum("...im,...jm->...ij", derr, derr)
@@ -464,7 +464,7 @@ class DIIS:
         if self.precondition:
             pre = 1 / B.detach().diagonal(dim1=-1, dim2=-2).sqrt()
         else:
-            pre = B.new_ones((*nb, N - 1))
+            pre = B.new_ones((nb, N - 1))
         B = pre[..., None] * pre[..., None, :] * B
         B = B + self.regularization * torch.eye(N - 1, device=B.device)
         c = pre * torch.linalg.solve(B, pre * y)
@@ -473,9 +473,9 @@ class DIIS:
 
     def step(self, X: Tensor, err: Tensor, alpha: float = None) -> Tensor:
         c = self._get_coeffs(X, err)
-        X = torch.stack([X for X, _ in self.history], dim=-1)
-        err = torch.stack([e for _, e in self.history], dim=-1)
+        X = torch.stack([X for X, _ in self.history], dim=1)
+        err = torch.stack([e for _, e in self.history], dim=1)
         if alpha is not None:
             X = X + alpha * err.view(X.shape)
-        X = (c[..., None, None, :] * X).sum(dim=-1)
+        X = torch.einsum("bi,bi...->b...", c, X)
         return X
