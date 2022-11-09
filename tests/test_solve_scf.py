@@ -444,6 +444,7 @@ def test_B_N_radialbasis_pulay_UKS():
     grid = RadialGrid(end=10, dx=2e-2)
     system = SystemBatch(
         [
+            System(Z=torch.tensor([3]), centers=torch.tensor([0e0]), spin=1),
             System(Z=torch.tensor([5]), centers=torch.tensor([0e0]), spin=1),
             System(Z=torch.tensor([7]), centers=torch.tensor([0e0]), spin=3),
         ]
@@ -451,4 +452,23 @@ def test_B_N_radialbasis_pulay_UKS():
     basis = RadialBasis(system, grid)
     solver = UKS(basis, system.occ("aufbau,UKS"), LdaPw92())
     sol = solver.solve(mixer="pulay", density_threshold=1e-9, extra_fock_channel=True)
-    assert_allclose(sol.E, torch.tensor([-24.3494437516, -54.1287927509]))
+    assert_allclose(
+        sol.E, torch.tensor([-7.3414279159, -24.3494437516, -54.1287927509])
+    )
+
+
+def test_B_N_radialbasis_pulay_ROKS():
+    grid = RadialGrid(end=10, dx=2e-2)
+    system = SystemBatch(
+        [
+            System(Z=torch.tensor([3]), centers=torch.tensor([0e0]), spin=1),
+            System(Z=torch.tensor([5]), centers=torch.tensor([0e0]), spin=1),
+            System(Z=torch.tensor([7]), centers=torch.tensor([0e0]), spin=3),
+        ]
+    )
+    basis = RadialBasis(system, grid)
+    solver = ROKS(basis, system.occ("aufbau,ROKS"), LdaPw92())
+    sol = solver.solve(mixer="pulay", density_threshold=1e-9, extra_fock_channel=True)
+    assert_allclose(
+        sol.E, torch.tensor([-7.3414217792, -24.3492748850, -54.1272344935])
+    )

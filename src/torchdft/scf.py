@@ -353,6 +353,8 @@ class ROKS(SCFSolver):
         self, P_guess: Tensor = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         if P_guess is not None:
+            if self.extra_fock_channel:
+                P_guess = P_guess[:, :, None, :, :]
             return (
                 P_guess,
                 torch.tensor(0.0),
@@ -361,7 +363,7 @@ class ROKS(SCFSolver):
             )
         else:
             P_guess, acc_orbital_energy, orbital_energy, C = self.ks_iteration(
-                self.T + self.V_ext, self.S_or_X, self.occ
+                (self.T + self.V_ext).unsqueeze(1), self.S_or_X, self.occ
             )
             return (
                 P_guess,
@@ -391,8 +393,9 @@ class ROKS(SCFSolver):
         UHF occupied and virtual alpha orbital energies when applied to molecule
         with no beta electrons".
         """
+        P = P_in.sum(-3) if self.extra_fock_channel else P_in
         V_H, V_func, E_func = self.basis.get_int_integrals(
-            P_in, self.functional, create_graph=self.create_graph
+            P, self.functional, create_graph=self.create_graph
         )
         V_H = V_H.sum(1)
         Fa = self.T + self.V_ext + V_H + V_func[:, 0, ...]
@@ -418,11 +421,11 @@ class ROKS(SCFSolver):
             + Po.conj().transpose(-1, -2) @ Fa @ Pv
             + Pv.conj().transpose(-1, -2) @ Fc @ Pc
         )
-        F = F + F.conj().transpose(-1, -2)
+        F = (F + F.conj().transpose(-1, -2)).unsqueeze(1)
         if self.mixer == "pulay":
-            err = (F @ P_in.sum(1) @ self.S - self.S @ P_in.sum(1) @ F).flatten(1)
+            err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
             F = self.diis.step(F, err)
-        return F, V_H, V_func, E_func
+        return F, V_H.unsqueeze(1), V_func, E_func
 
     def get_total_energy(
         self,
@@ -432,10 +435,11 @@ class ROKS(SCFSolver):
         E_func: Tensor,
         acc_orbital_energy: Tensor,
     ) -> Tensor:
+        P = P_in.sum(-3) if self.extra_fock_channel else P_in
         energy = (
             acc_orbital_energy.sum(-1)
             + E_func
-            - ((V_H / 2 + V_func).squeeze() * P_in).sum((-3, -2, -1))
+            - ((V_H / 2 + V_func).squeeze() * P).sum((-3, -2, -1))
             + self.basis.E_nuc
         )
         return energy
@@ -443,8 +447,10 @@ class ROKS(SCFSolver):
     def check_convergence(
         self, P_in: Tensor, P_out: Tensor, density_threshold: float
     ) -> Tuple[Tensor, Tensor]:
-        P_out = P_out.sum(-3)
-        P_in = P_in.sum(-3)
+        P_out = P_out.sum(1)
+        P_in = P_in.sum(1)
+        P_in = P_in.sum(-3) if self.extra_fock_channel else P_in
+        P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
         density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
         return density_diff, density_diff < density_threshold
 
