@@ -283,6 +283,8 @@ class UKS(SCFSolver):
         self, P_guess: Tensor = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         if P_guess is not None:
+            if self.extra_fock_channel:
+                P_guess = P_guess[:, :, None, :, :]
             return (
                 P_guess,
                 torch.tensor(0.0),
@@ -305,8 +307,9 @@ class UKS(SCFSolver):
     def build_fock_matrix(
         self, P_in: Tensor, mixer: str
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        P = P_in.sum(-3) if self.extra_fock_channel else P_in
         V_H, V_func, E_func = self.basis.get_int_integrals(
-            P_in, self.functional, create_graph=self.create_graph
+            P, self.functional, create_graph=self.create_graph
         )
         V_H = V_H.sum(1)[:, None, ...]
         F = self.T[:, None, ...] + self.V_ext[:, None, ...] + V_H + V_func
@@ -323,10 +326,11 @@ class UKS(SCFSolver):
         E_func: Tensor,
         acc_orbital_energy: Tensor,
     ) -> Tensor:
+        P = P_in.sum(-3) if self.extra_fock_channel else P_in
         energy = (
             acc_orbital_energy.sum(-1)
             + E_func
-            - ((V_H / 2 + V_func).squeeze() * P_in).sum((-3, -2, -1))
+            - ((V_H / 2 + V_func).squeeze() * P).sum((-3, -2, -1))
             + self.basis.E_nuc
         )
         return energy
@@ -334,8 +338,10 @@ class UKS(SCFSolver):
     def check_convergence(
         self, P_in: Tensor, P_out: Tensor, density_threshold: float
     ) -> Tuple[Tensor, Tensor]:
-        P_out = P_out.sum(-3)
-        P_in = P_in.sum(-3)
+        P_out = P_out.sum(1)
+        P_in = P_in.sum(1)
+        P_in = P_in.sum(-3) if self.extra_fock_channel else P_in
+        P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
         density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
         return density_diff, density_diff < density_threshold
 

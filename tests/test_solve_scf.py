@@ -438,3 +438,17 @@ def test_solve_batch_grid():
     )
     assert_allclose(sol1.E[0], sol.E[0])
     assert_allclose(sol2.E[0], sol.E[1])
+
+
+def test_B_N_radialbasis_pulay_UKS():
+    grid = RadialGrid(end=10, dx=2e-2)
+    system = SystemBatch(
+        [
+            System(Z=torch.tensor([5]), centers=torch.tensor([0e0]), spin=1),
+            System(Z=torch.tensor([7]), centers=torch.tensor([0e0]), spin=3),
+        ]
+    )
+    basis = RadialBasis(system, grid)
+    solver = UKS(basis, system.occ("aufbau,UKS"), LdaPw92())
+    sol = solver.solve(mixer="pulay", density_threshold=1e-9, extra_fock_channel=True)
+    assert_allclose(sol.E, torch.tensor([-24.3494437516, -54.1287927509]))
