@@ -248,6 +248,20 @@ def test_Li_radialbasis():
     assert_allclose(sol.E, sol_truth.E, atol=1.6e-3, rtol=1e-4)
 
 
+def test_Be_C_radialbasis_pulay():
+    grid = RadialGrid(end=10, dx=2e-2)
+    system = SystemBatch(
+        [
+            System(Z=torch.tensor([4]), centers=torch.tensor([0e0])),
+            System(Z=torch.tensor([6]), centers=torch.tensor([0e0])),
+        ]
+    )
+    basis = RadialBasis(system, grid)
+    solver = RKS(basis, system.occ("aufbau,RKS"), LdaPw92())
+    sol = solver.solve(mixer="pulay", density_threshold=1e-9, extra_fock_channel=True)
+    assert_allclose(sol.E, torch.tensor([-14.4447894200, -37.4198234193]))
+
+
 def test_batched_radialbasis():
     grid = RadialGrid(end=10.0, dx=1e0)
     # Li

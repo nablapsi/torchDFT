@@ -108,6 +108,7 @@ class SCFSolver(ABC):
                 alpha = alpha * alpha_decay
             energy_prev = energy
         else:
+            P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
             raise SCFNotConvergedError(
                 SCFSolution(
                     E=energy,
@@ -119,6 +120,7 @@ class SCFSolver(ABC):
                     converged=density_diff < density_threshold,
                 )
             )
+        P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
         return SCFSolution(
             E=energy,
             P=P_out,
@@ -167,7 +169,6 @@ class SCFSolver(ABC):
             dim=-1
         )  # shape = [batch, (s), (l)]
         if self.extra_fock_channel:
-            P = P.sum(-3)
             acc_orbital_energy = acc_orbital_energy.sum(-1)
         return P, acc_orbital_energy, orbital_energy, C.transpose(-2, -1)
 
@@ -211,6 +212,8 @@ class RKS(SCFSolver):
         self, P_guess: Tensor = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         if P_guess is not None:
+            if self.extra_fock_channel:
+                P_guess = P_guess[:, None, :, :]
             return (
                 P_guess,
                 torch.tensor(0.0),
@@ -223,8 +226,9 @@ class RKS(SCFSolver):
     def build_fock_matrix(
         self, P_in: Tensor, mixer: str
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+        P = P_in.sum(-3) if self.extra_fock_channel else P_in
         V_H, V_func, E_func = self.basis.get_int_integrals(
-            P_in, self.functional, create_graph=self.create_graph
+            P, self.functional, create_graph=self.create_graph
         )
         F = self.T + self.V_ext + V_H + V_func
         if self.mixer == "pulay":
@@ -240,16 +244,19 @@ class RKS(SCFSolver):
         E_func: Tensor,
         acc_orbital_energy: Tensor,
     ) -> Tensor:
+        P = P_in.sum(-3) if self.extra_fock_channel else P_in
         return (
             acc_orbital_energy
             + E_func
-            - ((V_H / 2 + V_func).squeeze() * P_in).sum((-2, -1))
+            - ((V_H / 2 + V_func).squeeze() * P).sum((-2, -1))
             + self.basis.E_nuc
         )
 
     def check_convergence(
         self, P_in: Tensor, P_out: Tensor, density_threshold: float
     ) -> Tuple[Tensor, Tensor]:
+        P_in = P_in.sum(-3) if self.extra_fock_channel else P_in
+        P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
         density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
         return density_diff, density_diff < density_threshold
 
