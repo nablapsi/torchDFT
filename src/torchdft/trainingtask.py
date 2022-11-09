@@ -181,11 +181,8 @@ class TrainingTask(nn.Module, ABC):
         else:
             samples = basis.E_nuc.shape[0]
             assert len(basis.E_nuc.shape) == 1
-            assert len(occ.shape) == 2
-            if occ.shape[0] == 1:
-                occ = occ.expand(samples, -1)
             assert len(data.energy.shape) == 1
-            assert len(data.P.shape) == 3
+            assert 3 <= len(data.P.shape) <= 4
             assert occ.shape[0] == samples
             assert data.energy.shape[0] == samples
             assert data.P.shape[0] == samples
@@ -221,6 +218,9 @@ class TrainingTask(nn.Module, ABC):
             sol = e.sol
         npred = basis.density(sol.P)
         nref = basis.density(data.P)
+        if len(sol.P.shape) == 4:
+            npred = npred.sum(1)
+            nref = nref.sum(1)
         Eloss = (sol.E - data.energy).abs()
         nloss = basis.density_mse(npred - nref)
         nmetrics = basis.density_metrics_fn(npred, nref)
@@ -540,6 +540,11 @@ class GradientTrainingTask(TrainingTask):
         VH, Vfunc, Efunc = basis.get_int_integrals(data.P, self.functional)
         vext = Vext.diagonal(dim1=-1, dim2=-2)
         vH = VH.diagonal(dim1=-1, dim2=-2)
+        if len(data.P.shape) == 4:  # Spin polarized case.
+            VH = VH.sum(1)
+            P = P.sum(1)
+            vext = vext[:, None, ...]
+            vH = vH.sum(1)[:, None, ...]
         laplacian = basis.get_func_laplacian(data.C)
         energybase = ((T + Vext + 5e-1 * VH) * P).flatten(1).sum(-1) + basis.E_nuc
         TVextVH = (-0.5 * laplacian).squeeze(-1) + (vext + vH)[..., None, :] * psi
@@ -577,11 +582,11 @@ class GradientTrainingTask(TrainingTask):
         (vfunc,) = torch.autograd.grad(
             eps_func.sum(), self.density.value, create_graph=self.training
         )
-        vfunc = (
-            vfunc[..., None, :]
-            if len(data.TVextVH.shape) == 3
-            else vfunc[..., None, None, :]
-        )
+
+        if len(data.TVextVH.shape) == len(vfunc.shape) + 2:
+            vfunc = vfunc[..., None, None, :]  # Add l and orbital dimensions
+        elif len(data.TVextVH.shape) == len(vfunc.shape) + 1:
+            vfunc = vfunc[..., None, :]  # Add orbital dimension
         H1 = data.TVextVH + vfunc * data.psi
         mu = (data.psi * data.grid_weights * H1).sum(-1)
         H2 = mu[..., None] * data.psi
