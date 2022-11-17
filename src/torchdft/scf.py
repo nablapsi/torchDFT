@@ -385,10 +385,10 @@ class ROKS(SCFSolver):
         Pb = P_in[:, 1, ...]
 
         Fc = (Fa + Fb) * 5e-1
-        Pc = torch.einsum("b...ik, bkj ->b...ij", Pb, self.S)
-        Po = torch.einsum("b...ik, bkj ->b...ij", Pa - Pb, self.S)
+        Pc = torch.einsum("b...ik, b...kj ->b...ij", Pb, self.S)
+        Po = torch.einsum("b...ik, b...kj ->b...ij", Pa - Pb, self.S)
         Pv = torch.eye(self.S.shape[-1]) - torch.einsum(
-            "b...ik, bkj ->b...ij", Pa, self.S
+            "b...ik, b...kj ->b...ij", Pa, self.S
         )
 
         F = (
