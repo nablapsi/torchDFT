@@ -655,3 +655,35 @@ class NDVNConvLogPolarizedNet(Functional):
         x = torch.cat((logn[..., None], s[..., None], ndv[..., None], glob), -1)
         x = self.mlp(x)
         return self.sign * x.squeeze(-1)
+
+
+class PolarizedLDANet(Functional):
+    """Trainable functional with [log(n), s] features."""
+
+    def __init__(
+        self,
+        negative_transform: bool = False,
+    ) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+
+        self.mlp = nn.Sequential(
+            nn.Linear(2, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.nu + den.nd
+        s = (den.nu - den.nd) / n
+        logn = (n + 1e-4).log()
+        x = torch.cat((logn[..., None], s[..., None]), -1)
+        x = self.mlp(x)
+        return self.sign * x.squeeze(-1)
