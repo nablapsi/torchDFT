@@ -41,8 +41,8 @@ class Density:
         self.grid_weights = grid_weights
         self.grad = grad
         self.value = torch.where(
-            self.value <= 1e-100,
-            self.value.new_full((1,), 1e-100),
+            self.value <= 1e-20,
+            self.value.new_full((1,), 1e-20),
             self.value,
         )
         if len(self.value.shape) == 3:
