@@ -24,7 +24,7 @@ from .gaussbasis import GaussianBasis
 from .scf import SCFSolver
 
 __all__ = ["TrainingTask"]
-
+SCHEDULER_KWARGS = {"patience": 300, "min_lr": 1e-6}
 Metrics = Dict[str, Tensor]
 LossFn = Callable[
     [Basis, Tensor, Tensor, Tensor, Tensor, Tensor], Tuple[Tensor, Metrics]
@@ -310,6 +310,8 @@ class TrainingTask(nn.Module, ABC):
         clip_grad_norm: float = None,
         lr: float = 1e-2,
         minibatchsize: int = None,
+        lr_scheduler: str = "ReduceLROnPlateau",
+        lr_scheduler_kwargs: Dict[str, Any] = SCHEDULER_KWARGS,
         **validation_kwargs: Any,
     ) -> None:
         """Execute training process of the model."""
@@ -400,9 +402,8 @@ class TrainingTask(nn.Module, ABC):
                 opt: torch.optim.Optimizer = torch.optim.AdamW(
                     self.functional.parameters(), lr=lr
                 )
-                scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    opt, patience=300
-                )
+                scheduler_factory = getattr(torch.optim.lr_scheduler, lr_scheduler)
+                scheduler = scheduler_factory(opt, **lr_scheduler_kwargs)
                 for _adam_steps in range(self.steps):
                     if isinstance(self.basis, GaussianBasis):
                         self.basis.mask = (
@@ -413,7 +414,10 @@ class TrainingTask(nn.Module, ABC):
                     writer.add_scalar("learning_rate", lr, step)
                     if not self.minibatchsize:
                         opt.step()
-                    scheduler.step(loss)
+                    if lr_scheduler == "ReduceLROnPlateau":
+                        scheduler.step(loss)
+                    else:
+                        scheduler.step()
                     if loss < loss_threshold:
                         break
             if self.minibatchsize is not None:
