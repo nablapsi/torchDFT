@@ -101,6 +101,55 @@ class GradTTData(nn.Module):
         return self.N.shape[0]
 
 
+class GradTTDataBasis(nn.Module):
+    N: Tensor
+    occ_mask: Tensor
+    C: Tensor
+    energybase: Tensor
+    Eref: Tensor
+
+    def __init__(
+        self,
+        N: Tensor,
+        occ_mask: Tensor,
+        C: Tensor,
+        P: Tensor,
+        S: Tensor,
+        T: Tensor,
+        Vext: Tensor,
+        energybase: Tensor,
+        Eref: Tensor,
+    ):
+        super().__init__()
+        self.register_buffer("N", N)
+        self.register_buffer("occ_mask", occ_mask)
+        self.register_buffer("C", C)
+        self.register_buffer("P", P)
+        self.register_buffer("S", S)
+        self.register_buffer("T", T)
+        self.register_buffer("Vext", Vext)
+        self.register_buffer("energybase", energybase)
+        self.register_buffer("Eref", Eref)
+
+    def __getitem__(self, item: List[int]) -> GradTTDataBasis:
+        if self.T.shape[0] > 1:
+            T = self.T[item]
+        return GradTTDataBasis(
+            self.N[item],
+            self.occ_mask[item],
+            self.C[item],
+            self.P[item],
+            self.S,
+            T,
+            self.Vext[item],
+            self.energybase[item],
+            self.Eref[item],
+        )
+
+    def __len__(self) -> int:
+        return self.N.shape[0]
+
+
 class DataLoader:
     def __init__(self, data: GradTTData, batchsize: int, shuffle: bool = True):
         self.data = data
@@ -269,7 +318,7 @@ class TrainingTask(nn.Module, ABC):
         assert self.minibatchsize is None or self.supports_minibatch
         if self.minibatchsize is not None:
             assert self.supports_minibatch
-            assert type(self.data) == GradTTData
+            assert type(self.data) == GradTTData or type(self.data) == GradTTDataBasis
             dataloader = DataLoader(
                 self.data, batchsize=self.minibatchsize, shuffle=True
             )
@@ -599,6 +648,112 @@ class GradientTrainingTask(TrainingTask):
 
         energy_loss_sq = (data.Eref - (data.energybase + E_func)) ** 2 / data.N
         regularization_sq = grad2.sum(-1)
+
+        metrics = {}
+        if data.Eref.shape[0] > 1 and self.minibatchsize is None:
+            for i, (e, r) in enumerate(zip(energy_loss_sq, regularization_sq)):
+                metrics[f"individual_loss/energy{i}"] = e.detach().sqrt()
+                metrics[f"individual_loss/regularization{i}"] = r.detach().sqrt()
+
+        energy_loss_sq = energy_loss_sq.mean()
+        regularization_sq = regularization_sq.mean()
+        loss_sq = energy_loss_sq + self.l * regularization_sq
+        loss_sq.backward()
+
+        metrics["loss"] = loss_sq.detach().sqrt()
+        metrics["loss/energy"] = energy_loss_sq.detach().sqrt()
+        metrics["loss/regularization"] = regularization_sq.detach().sqrt()
+        return metrics
+
+
+class GradientTrainingTaskBasis(TrainingTask):
+    """Represents a training task with gradient regularization."""
+
+    basis: Basis
+    occ: Tensor
+    data: GradTTData
+    train_samples: int
+    functional: Functional
+    steps: int
+    supports_minibatch = True
+
+    def __init__(
+        self,
+        functional: Functional,
+        basis: Basis,
+        occ: Tensor,
+        data: SCFData,
+        make_solver: Optional[type[SCFSolver]] = None,
+        steps: int = 200,
+        l: float = 1.0,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__()
+        self.functional = functional
+        basis, occ, data, self.train_sample = self.prepare_data(basis, occ, data)
+        self.basis = basis
+        self.data = data
+        self.register_buffer("occ", occ)
+        self.steps = steps
+        # In this training task it is not compulsory to have a solver,
+        # but it is required for validation
+        self.make_solver = make_solver
+        self.l = l
+        self.kwargs = kwargs
+        self.minibatchsize = None
+
+    def prepare_data(
+        self,
+        basis: Basis,
+        occ: Tensor,
+        data: SCFData,
+    ) -> Tuple[Basis, Tensor, GradTTData, int]:
+        assert data.C is not None
+        train_samples = data.energy.shape[0]
+        occ_mask = torch.where(occ > 0, occ.new_ones(1), occ.new_zeros(1))
+        P = (data.C.transpose(-2, -1) * occ[..., None, :]) @ data.C
+        S, T, Vext = basis.get_core_integrals()
+        VH, Vfunc, Efunc = basis.get_int_integrals(data.P, self.functional)
+        if len(data.P.shape) == 4:
+            T = T[:, None, ...]
+            Vext = Vext[:, None, ...]
+            VH = VH.sum(1)[:, None, ...]
+        energybase = ((T + Vext + 5e-1 * VH) * P).flatten(1).sum(-1) + basis.E_nuc
+        N = occ.reshape(occ.shape[0], -1).sum(-1)
+        return (
+            basis,
+            occ,
+            GradTTDataBasis(
+                N,
+                occ_mask,
+                data.C,
+                data.P,
+                S,
+                T,
+                Vext,
+                energybase,
+                data.energy,
+            ),
+            train_samples,
+        )
+
+    def metrics_fn(self, data: Union[SCFData, GradTTData]) -> Metrics:
+        assert type(data) == GradTTDataBasis
+        VH, Vfunc, Efunc = self.basis.get_int_integrals(
+            data.P, self.functional, create_graph=self.training
+        )
+        if len(data.P.shape) == 4:
+            VH = VH.sum(1)[:, None, ...]
+        F = (data.T + data.Vext + VH + Vfunc).unsqueeze(-3)  # Add orbital dimension
+        epsilon = (F * (data.C[..., None] * data.C[..., None, :])).sum((-1, -2))
+        gi = torch.einsum(
+            "...i, ...ji -> ...j", data.C, F - epsilon[..., None, None] * data.S
+        )
+        G = gi[..., None] * gi[..., None, :]
+        gnorm = (G * data.S).flatten(1).sum(-1)
+
+        energy_loss_sq = (data.Eref - (data.energybase + Efunc)) ** 2 / data.N
+        regularization_sq = gnorm
 
         metrics = {}
         if data.Eref.shape[0] > 1 and self.minibatchsize is None:
