@@ -28,7 +28,7 @@ class System:
     def occ(self, mode_spin: str = "KS, RKS") -> Tensor:
         mode = mode_spin.split(",")[0].strip()
         spin_treat = mode_spin.split(",")[1].strip()
-        nalpha = (self.n_electrons + self.spin) // 2
+        nalpha = torch.div((self.n_electrons + self.spin), 2, rounding_mode="trunc")
         nbeta = nalpha - self.spin
         assert nalpha + nbeta == self.n_electrons
         if mode == "KS":
@@ -43,19 +43,16 @@ class System:
             occ_b = self.centers.new_tensor([nbeta])
             occ = torch.stack((occ_a, occ_b))
         elif mode == "aufbau":
-            occ = self.aufbau_occ()
+            occ = self.aufbau_occ(nalpha, nbeta)
         if spin_treat == "RKS":
             occ = occ[0] + occ[1]
         return occ[None, :]
 
-    def aufbau_occ(self) -> Tensor:
+    def aufbau_occ(self, nalpha: int, nbeta: int) -> Tensor:
         order = "1s 2s 2p 3s 3p 4s 3d 4p 5s 4d 5p 6s 4f 5d 6p 7s 5f 6d 7p".split()
         l = {"s": 0, "p": 1, "d": 2, "f": 3}
         self.lmax = 0
         nmax = 0
-        nalpha = (self.n_electrons + self.spin) // 2
-        nbeta = nalpha - self.spin
-        assert nalpha + nbeta == self.n_electrons
         occ = self.centers.new_zeros([2, 4, 7], dtype=torch.int64)
         nleft = torch.tensor([nalpha, nbeta], dtype=torch.int64)
         for elem in order:
@@ -102,7 +99,7 @@ class SystemBatch:
     def occ(self, mode_spin: str = "KS, RKS") -> Tensor:
         mode = mode_spin.split(",")[0].strip()
         spin_treat = mode_spin.split(",")[1].strip()
-        nalpha = (self.n_electrons + self.spin) // 2
+        nalpha = torch.div((self.n_electrons + self.spin), 2, rounding_mode="trunc")
         nbeta = nalpha - self.spin
         if mode == "KS":
             self.lmax = -1
@@ -116,7 +113,10 @@ class SystemBatch:
             occ_b = nbeta[:, None]
             occ = torch.stack((occ_a, occ_b), dim=-2)
         elif mode == "aufbau":
-            occ_list = [system.aufbau_occ() for system in self.systems]
+            occ_list = [
+                system.aufbau_occ(alpha, beta)
+                for (system, alpha, beta) in zip(self.systems, nalpha, nbeta)
+            ]
             occ_shapes = (torch.tensor([occ.shape for occ in occ_list]).max(0)).values
             occ = self.systems[0].centers.new_zeros(
                 (self.nbatch, 2, int(occ_shapes[-2]), int(occ_shapes[-1]))
