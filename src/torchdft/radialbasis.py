@@ -36,7 +36,7 @@ class RadialBasis(Basis):
         self.register_buffer("T", -5e-1 * self.get_laplacian())
         self.register_buffer("V_ext", (-self.system.Z / self.grid).diag_embed())
         self.register_buffer(
-            "S", self.grid.new_ones(self.grid.size()).diag_embed().unsqueeze(0)
+            "S", self.grid.new_ones(self.grid.shape[-1]).diag_embed().unsqueeze(0)
         )
         self.register_buffer(
             "grad_operator",
