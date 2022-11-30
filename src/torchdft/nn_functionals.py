@@ -657,6 +657,71 @@ class NDVNConvLogPolarizedNet(Functional):
         return self.sign * x.squeeze(-1)
 
 
+class NDVNConvLogPolarizedNet2(Functional):
+    """KEF with [log(nu), log(nd), log(n), s, 4pin, conv(n)] features."""
+
+    alpha: Tensor
+
+    def __init__(
+        self,
+        N: int = 6,
+        minN: float = -3.0,
+        maxN: float = 0.0,
+        negative_transform: bool = False,
+    ) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+        self.N = N
+        self.register_buffer(
+            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
+        )
+
+        self.mlp = nn.Sequential(
+            nn.Linear(2 * self.N + 5, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def convolution(self, den: Density, alpha: Tensor) -> Tensor:
+        n = torch.stack((den.nu, den.nd), dim=1)
+        g = (den.grid[..., :, None] - den.grid[..., None, :]) ** 2
+        expo = (-0.5 * g[..., :, :, None] / alpha[None, None, :]).exp() / (
+            2e0 * torch.pi * alpha[None, None, :]
+        ).sqrt()
+        return torch.einsum("...ijk, ...j-> ...ik", expo, n * den.grid_weights)
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.nu + den.nd
+        s = (den.nu - den.nd) / n
+        logn = (n + 1e-4).log()
+        lognu = (den.nu + 1e-4).log()
+        lognd = (den.nd + 1e-4).log()
+        glob = self.convolution(den, self.alpha)
+        ndv = n * 4e0 * torch.pi * den.grid**2
+        x = torch.cat(
+            (
+                logn[..., None],
+                lognu[..., None],
+                lognd[..., None],
+                s[..., None],
+                ndv[..., None],
+                glob[:, 0, ...],
+                glob[:, 1, ...],
+            ),
+            -1,
+        )
+        x = self.mlp(x)
+
+        return self.sign * x.squeeze(-1)
+
+
 class PolarizedLDANet(Functional):
     """Trainable functional with [log(n), s] features."""
 
