@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import torch
 import xitorch
@@ -49,16 +49,16 @@ class SCFSolver(ABC):
         alpha: float = 0.5,
         alpha_decay: float = 1.0,
         max_iterations: int = 100,
-        iterations: Iterable[int] = None,
+        iterations: Optional[Iterable[int]] = None,
         density_threshold: float = 1e-4,
         print_iterations: Union[bool, int] = False,
-        tape: List[Tuple[Tensor, Tensor]] = None,
+        tape: Optional[List[Tuple[Tensor, Tensor]]] = None,
         create_graph: bool = False,
         use_xitorch: bool = True,
-        mixer: str = None,
-        mixer_kwargs: Dict[str, Any] = None,
+        mixer: Optional[str] = None,
+        mixer_kwargs: Optional[Dict[str, Any]] = None,
         extra_fock_channel: bool = False,
-        P_guess: Tensor = None,
+        P_guess: Optional[Tensor] = None,
     ) -> SCFSolution:
         """Given a system, evaluates its energy by solving the KS equations."""
         self.mixer = mixer or DEFAULT_MIXER
@@ -173,7 +173,7 @@ class SCFSolver(ABC):
 
     @abstractmethod
     def get_init_guess(
-        self, P_guess: Tensor = None
+        self, P_guess: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         pass
 
@@ -205,7 +205,7 @@ class RKS(SCFSolver):
     """Restricted KS solver."""
 
     def get_init_guess(
-        self, P_guess: Tensor = None
+        self, P_guess: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         if P_guess is not None:
             if self.extra_fock_channel:
@@ -261,7 +261,7 @@ class UKS(SCFSolver):
     """Unrestricted KS solver."""
 
     def get_init_guess(
-        self, P_guess: Tensor = None
+        self, P_guess: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         if P_guess is not None:
             if self.extra_fock_channel:
@@ -331,7 +331,7 @@ class ROKS(SCFSolver):
     """Restricted open KS solver."""
 
     def get_init_guess(
-        self, P_guess: Tensor = None
+        self, P_guess: Optional[Tensor] = None
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         if P_guess is not None:
             if self.extra_fock_channel:
@@ -471,7 +471,7 @@ class DIIS:
         c = torch.cat([-c[..., :1], -c.diff(dim=-1), 1 + c[..., -1:]], dim=-1)
         return c
 
-    def step(self, X: Tensor, err: Tensor, alpha: float = None) -> Tensor:
+    def step(self, X: Tensor, err: Tensor, alpha: Optional[float] = None) -> Tensor:
         c = self._get_coeffs(X, err)
         X = torch.stack([X for X, _ in self.history], dim=1)
         err = torch.stack([e for _, e in self.history], dim=1)

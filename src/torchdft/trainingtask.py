@@ -38,7 +38,7 @@ class SCFData(nn.Module):
     P: Tensor
     C: Optional[Tensor]
 
-    def __init__(self, energy: Tensor, P: Tensor, C: Tensor = None):
+    def __init__(self, energy: Tensor, P: Tensor, C: Optional[Tensor] = None):
         super().__init__()
         self.register_buffer("energy", energy)
         self.register_buffer("P", P)
@@ -105,6 +105,10 @@ class GradTTDataBasis(nn.Module):
     N: Tensor
     occ_mask: Tensor
     C: Tensor
+    P: Tensor
+    S: Tensor
+    T: Tensor
+    Vext: Tensor
     energybase: Tensor
     Eref: Tensor
 
@@ -151,7 +155,12 @@ class GradTTDataBasis(nn.Module):
 
 
 class DataLoader:
-    def __init__(self, data: GradTTData, batchsize: int, shuffle: bool = True):
+    def __init__(
+        self,
+        data: Union[GradTTData, GradTTDataBasis],
+        batchsize: int,
+        shuffle: bool = True,
+    ):
         self.data = data
         self.batchsize = batchsize
         self.shuffle = shuffle
@@ -168,7 +177,7 @@ class DataLoader:
             random.shuffle(self.data_indexes)
         return self
 
-    def __next__(self) -> GradTTData:
+    def __next__(self) -> Union[GradTTData, GradTTDataBasis]:
         if self.n < self.nminimibatch:
             batch = self.data_indexes[
                 self.n * self.batchsize : (self.n + 1) * self.batchsize
@@ -206,7 +215,7 @@ class TrainingTask(nn.Module, ABC):
     make_solver: Optional[type[SCFSolver]]
     basis: Basis
     occ: Tensor
-    data: Union[SCFData, GradTTData]
+    data: Union[SCFData, GradTTData, GradTTDataBasis]
     train_samples: int
     functional: Functional
     steps: int
@@ -238,11 +247,13 @@ class TrainingTask(nn.Module, ABC):
         return basis, occ, data, samples
 
     @abstractmethod
-    def metrics_fn(self, data: Union[SCFData, GradTTData]) -> Metrics:
+    def metrics_fn(self, data: Union[SCFData, GradTTData, GradTTDataBasis]) -> Metrics:
         pass
 
     def training_step(
-        self, data: Union[SCFData, GradTTData], opt: torch.optim.Optimizer = None
+        self,
+        data: Union[SCFData, GradTTData, GradTTDataBasis],
+        opt: Optional[torch.optim.Optimizer] = None,
     ) -> Metrics:
         """Execute a training step."""
         assert self.training
@@ -296,26 +307,28 @@ class TrainingTask(nn.Module, ABC):
 
     def fit(  # noqa: C901 TODO too complex
         self,
-        workdir: str,
+        workdir_name: str,
         device: str = "cuda",
         seed: int = 0,
-        validation_set: Tuple[
-            Basis,
-            Tensor,
-            Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
+        validation_set: Optional[
+            Tuple[
+                Basis,
+                Tensor,
+                Union[SCFData, Tuple[Union[float, Tensor], Tensor]],
+            ]
         ] = None,
         validation_step: int = 0,
         with_adam: bool = False,
         loss_threshold: float = 0.0,
-        clip_grad_norm: float = None,
+        clip_grad_norm: Optional[float] = None,
         lr: float = 1e-2,
-        minibatchsize: int = None,
+        minibatchsize: Optional[int] = None,
         lr_scheduler: str = "ReduceLROnPlateau",
         lr_scheduler_kwargs: Dict[str, Any] = SCHEDULER_KWARGS,
         **validation_kwargs: Any,
     ) -> None:
         """Execute training process of the model."""
-        workdir = Path(workdir)
+        workdir = Path(workdir_name)
         self.minibatchsize = minibatchsize
         assert self.minibatchsize is None or self.supports_minibatch
         if self.minibatchsize is not None:
@@ -374,7 +387,7 @@ class TrainingTask(nn.Module, ABC):
                     last_log = now
                     chkpt.replace(
                         self.functional.state_dict(),
-                        workdir / f"chkpt-{step}.pt",  # type: ignore
+                        workdir / f"chkpt-{step}.pt",
                     )
                 if validation_step != 0 and step % validation_step == 0:
                     assert type(self.v_occ) is Tensor
@@ -388,7 +401,7 @@ class TrainingTask(nn.Module, ABC):
                     if v_loss < bestv_loss:
                         validation_chkpt.replace(
                             self.functional.state_dict(),
-                            workdir / "best_validation.pt",  # type: ignore
+                            workdir / "best_validation.pt",
                         )
                         bestv_loss = v_loss.item()
                     self.train()
@@ -490,7 +503,7 @@ class SCFTrainingTask(TrainingTask):
 
     def metrics_fn(
         self,
-        data: Union[SCFData, GradTTData],
+        data: Union[SCFData, GradTTData, GradTTDataBasis],
     ) -> Metrics:
         """Evaluate model provided a basis and orbital occupation numbers.
 
@@ -563,9 +576,9 @@ class GradientTrainingTask(TrainingTask):
     ) -> None:
         super().__init__()
         self.functional = functional
-        basis, occ, data, self.train_sample = self.prepare_data(basis, occ, data)
-        self.basis = basis
-        self.data = data
+        self.basis, occ, self.data, self.train_sample = self.prepare_data(
+            basis, occ, data
+        )
         self.register_buffer("occ", occ)
         self.steps = steps
         # In this training task it is not compulsory to have a solver,
@@ -620,7 +633,7 @@ class GradientTrainingTask(TrainingTask):
             train_samples,
         )
 
-    def metrics_fn(self, data: Union[SCFData, GradTTData]) -> Metrics:
+    def metrics_fn(self, data: Union[SCFData, GradTTData, GradTTDataBasis]) -> Metrics:
         assert type(data) == GradTTData
         n = data.n.detach().requires_grad_()
         self.density = Density(
@@ -675,7 +688,7 @@ class GradientTrainingTaskBasis(TrainingTask):
 
     basis: Basis
     occ: Tensor
-    data: GradTTData
+    data: GradTTDataBasis
     train_samples: int
     functional: Functional
     steps: int
@@ -694,9 +707,9 @@ class GradientTrainingTaskBasis(TrainingTask):
     ) -> None:
         super().__init__()
         self.functional = functional
-        basis, occ, data, self.train_sample = self.prepare_data(basis, occ, data)
-        self.basis = basis
-        self.data = data
+        self.basis, occ, self.data, self.train_sample = self.prepare_data(
+            basis, occ, data
+        )
         self.register_buffer("occ", occ)
         self.steps = steps
         # In this training task it is not compulsory to have a solver,
@@ -711,7 +724,7 @@ class GradientTrainingTaskBasis(TrainingTask):
         basis: Basis,
         occ: Tensor,
         data: SCFData,
-    ) -> Tuple[Basis, Tensor, GradTTData, int]:
+    ) -> Tuple[Basis, Tensor, GradTTDataBasis, int]:
         assert data.C is not None
         train_samples = data.energy.shape[0]
         occ_mask = torch.where(occ > 0, occ.new_ones(1), occ.new_zeros(1))
@@ -741,7 +754,7 @@ class GradientTrainingTaskBasis(TrainingTask):
             train_samples,
         )
 
-    def metrics_fn(self, data: Union[SCFData, GradTTData]) -> Metrics:
+    def metrics_fn(self, data: Union[SCFData, GradTTData, GradTTDataBasis]) -> Metrics:
         assert type(data) == GradTTDataBasis
         VH, Vfunc, Efunc = self.basis.get_int_integrals(
             data.P, self.functional, create_graph=self.training

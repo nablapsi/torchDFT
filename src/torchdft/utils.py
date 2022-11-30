@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import math
 from dataclasses import dataclass
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 import torch
 from torch import Tensor
@@ -15,7 +15,9 @@ from torchdft import constants
 class System:
     """Represents an electronic system."""
 
-    def __init__(self, Z: Tensor, centers: Tensor, charge: int = 0, spin: int = None):
+    def __init__(
+        self, Z: Tensor, centers: Tensor, charge: int = 0, spin: Optional[int] = None
+    ):
         self.Z = Z[None, :]
         self.centers = centers[None, :]
         self.n_electrons = int(self.Z.sum() - charge)
@@ -28,13 +30,15 @@ class System:
     def occ(self, mode_spin: str = "KS, RKS") -> Tensor:
         mode = mode_spin.split(",")[0].strip()
         spin_treat = mode_spin.split(",")[1].strip()
-        nalpha = torch.div((self.n_electrons + self.spin), 2, rounding_mode="trunc")
+        nalpha = int(
+            torch.div((self.n_electrons + self.spin), 2, rounding_mode="trunc")
+        )
         nbeta = nalpha - self.spin
         assert nalpha + nbeta == self.n_electrons
         if mode == "KS":
             self.lmax = -1
-            occ_a = self.centers.new_ones([nalpha])
-            occ_b = self.centers.new_zeros([nalpha])
+            occ_a = self.centers.new_ones(nalpha)
+            occ_b = self.centers.new_zeros(nalpha)
             occ_b[:nbeta] = 1
             occ = torch.stack((occ_a, occ_b))
         elif mode == "OF":
