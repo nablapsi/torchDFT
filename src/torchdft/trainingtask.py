@@ -105,10 +105,8 @@ class GradTTDataBasis(nn.Module):
     N: Tensor
     occ_mask: Tensor
     C: Tensor
-    P: Tensor
     S: Tensor
-    T: Tensor
-    Vext: Tensor
+    TVext: Tensor
     energybase: Tensor
     Eref: Tensor
 
@@ -117,10 +115,8 @@ class GradTTDataBasis(nn.Module):
         N: Tensor,
         occ_mask: Tensor,
         C: Tensor,
-        P: Tensor,
         S: Tensor,
-        T: Tensor,
-        Vext: Tensor,
+        TVext: Tensor,
         energybase: Tensor,
         Eref: Tensor,
     ):
@@ -128,24 +124,20 @@ class GradTTDataBasis(nn.Module):
         self.register_buffer("N", N)
         self.register_buffer("occ_mask", occ_mask)
         self.register_buffer("C", C)
-        self.register_buffer("P", P)
         self.register_buffer("S", S)
-        self.register_buffer("T", T)
-        self.register_buffer("Vext", Vext)
+        self.register_buffer("TVext", TVext)
         self.register_buffer("energybase", energybase)
         self.register_buffer("Eref", Eref)
 
     def __getitem__(self, item: List[int]) -> GradTTDataBasis:
-        if self.T.shape[0] > 1:
-            T = self.T[item]
+        if self.TVext.shape[0] > 1:
+            TVext = self.TVext[item]
         return GradTTDataBasis(
             self.N[item],
             self.occ_mask[item],
             self.C[item],
-            self.P[item],
             self.S,
-            T,
-            self.Vext[item],
+            TVext,
             self.energybase[item],
             self.Eref[item],
         )
@@ -735,6 +727,7 @@ class GradientTrainingTaskBasis(TrainingTask):
             T = T[:, None, ...]
             Vext = Vext[:, None, ...]
             VH = VH.sum(1)[:, None, ...]
+        TVext = T + Vext
         energybase = ((T + Vext + 5e-1 * VH) * P).flatten(1).sum(-1) + basis.E_nuc
         N = occ.reshape(occ.shape[0], -1).sum(-1)
         return (
@@ -744,10 +737,8 @@ class GradientTrainingTaskBasis(TrainingTask):
                 N,
                 occ_mask,
                 data.C,
-                data.P,
                 S,
-                T,
-                Vext,
+                TVext,
                 energybase,
                 data.energy,
             ),
@@ -756,12 +747,15 @@ class GradientTrainingTaskBasis(TrainingTask):
 
     def metrics_fn(self, data: Union[SCFData, GradTTData, GradTTDataBasis]) -> Metrics:
         assert type(data) == GradTTDataBasis
+        P = (data.C.transpose(-2, -1) * self.occ[..., None, :]) @ data.C
+        if len(data.TVext.shape) == 5:
+            P = P.sum(-3)  # Sum extra_fock_matrix dimension
         VH, Vfunc, Efunc = self.basis.get_int_integrals(
-            data.P, self.functional, create_graph=self.training
+            P, self.functional, create_graph=self.training
         )
-        if len(data.P.shape) == 4:
+        if len(P.shape) == 4:
             VH = VH.sum(1)[:, None, ...]
-        F = (data.T + data.Vext + VH + Vfunc).unsqueeze(-3)  # Add orbital dimension
+        F = (data.TVext + VH + Vfunc).unsqueeze(-3)  # Add orbital dimension
         epsilon = (F * (data.C[..., None] * data.C[..., None, :])).sum((-1, -2))
         gi = torch.einsum(
             "...i, ...ji -> ...j", data.C, F - epsilon[..., None, None] * data.S
