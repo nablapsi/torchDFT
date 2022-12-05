@@ -281,7 +281,11 @@ class TrainingTask(nn.Module, ABC):
         metrics = {}
         for key in nmetrics.keys():
             nmetrics[key][sol.converged.logical_not()] = torch.nan
-        if data.P.shape[0] > 1 and self.minibatchsize is None:
+        if (
+            data.P.shape[0] > 1
+            and self.minibatchsize is None
+            and self.store_individual_loss
+        ):
             for i, (ener, den) in enumerate(zip(Eloss, nloss)):
                 metrics[f"individual_validation/Eloss{i}"] = ener.detach()
                 metrics[f"individual_validation/nloss{i}"] = den.detach().sqrt()
@@ -317,11 +321,13 @@ class TrainingTask(nn.Module, ABC):
         minibatchsize: Optional[int] = None,
         lr_scheduler: str = "ReduceLROnPlateau",
         lr_scheduler_kwargs: Dict[str, Any] = SCHEDULER_KWARGS,
+        store_individual_loss: bool = False,
         **validation_kwargs: Any,
     ) -> None:
         """Execute training process of the model."""
         workdir = Path(workdir_name)
         self.minibatchsize = minibatchsize
+        self.store_individual_loss = store_individual_loss
         assert self.minibatchsize is None or self.supports_minibatch
         if self.minibatchsize is not None:
             assert self.supports_minibatch
@@ -492,6 +498,7 @@ class SCFTrainingTask(TrainingTask):
         self.steps = steps
         self.kwargs = kwargs
         assert self.make_solver is not None
+        self.store_individual_loss = False
 
     def metrics_fn(
         self,
@@ -579,6 +586,7 @@ class GradientTrainingTask(TrainingTask):
         self.l = l
         self.kwargs = kwargs
         self.minibatchsize = None
+        self.store_individual_loss = False
 
     def prepare_data(
         self,
@@ -655,7 +663,11 @@ class GradientTrainingTask(TrainingTask):
         regularization_sq = grad2.sum(-1)
 
         metrics = {}
-        if data.Eref.shape[0] > 1 and self.minibatchsize is None:
+        if (
+            data.Eref.shape[0] > 1
+            and self.minibatchsize is None
+            and self.store_individual_loss
+        ):
             for i, (e, r) in enumerate(zip(energy_loss_sq, regularization_sq)):
                 metrics[f"individual_loss/energy{i}"] = e.detach().sqrt()
                 metrics[f"individual_loss/regularization{i}"] = r.detach().sqrt()
@@ -706,6 +718,7 @@ class GradientTrainingTaskBasis(TrainingTask):
         self.l = l
         self.kwargs = kwargs
         self.minibatchsize = None
+        self.store_individual_loss = False
 
     def prepare_data(
         self,
@@ -763,7 +776,11 @@ class GradientTrainingTaskBasis(TrainingTask):
         regularization_sq = gnorm
 
         metrics = {}
-        if data.Eref.shape[0] > 1 and self.minibatchsize is None:
+        if (
+            data.Eref.shape[0] > 1
+            and self.minibatchsize is None
+            and self.store_individual_loss
+        ):
             for i, (e, r) in enumerate(zip(energy_loss_sq, regularization_sq)):
                 metrics[f"individual_loss/energy{i}"] = e.detach().sqrt()
                 metrics[f"individual_loss/regularization{i}"] = r.detach().sqrt()
