@@ -628,15 +628,11 @@ class GradientTrainingTask(TrainingTask):
     def metrics_fn(self, data: Union[SCFData, GradTTData, GradTTDataBasis]) -> Metrics:
         assert type(data) == GradTTData
         n = data.n.detach().requires_grad_()
-        self.density = Density(
-            n,
-            data.grid,
-            data.grid_weights * data.dv,
-        )
+        self.density = Density(n, data.grid, data.grid_weights)
         eps_func = self.functional(self.density)
         if self.functional.per_electron:
             eps_func = eps_func * self.density.density
-        E_func = (eps_func * self.density.grid_weights).sum(-1)
+        E_func = (eps_func * data.grid_weights * data.dv).sum(-1)
         (vfunc,) = torch.autograd.grad(
             eps_func.sum(), self.density.value, create_graph=self.training
         )

@@ -658,7 +658,7 @@ class NDVNConvLogPolarizedNet(Functional):
 
 
 class NDVNConvLogPolarizedNet2(Functional):
-    """KEF with [log(nu), log(nd), log(n), s, 4pin, conv(n)] features."""
+    """KEF with [log(nu), log(nd), log(n), conv(nu), conv(nd), s] features."""
 
     alpha: Tensor
 
@@ -679,7 +679,7 @@ class NDVNConvLogPolarizedNet2(Functional):
         )
 
         self.mlp = nn.Sequential(
-            nn.Linear(2 * self.N + 5, 60),
+            nn.Linear(2 * self.N + 4, 60),
             nn.SiLU(),
             nn.Linear(60, 60),
             nn.SiLU(),
@@ -703,22 +703,19 @@ class NDVNConvLogPolarizedNet2(Functional):
         logn = (n + 1e-4).log()
         lognu = (den.nu + 1e-4).log()
         lognd = (den.nd + 1e-4).log()
-        glob = self.convolution(den, self.alpha)
-        ndv = n * 4e0 * torch.pi * den.grid**2
+        glob = (self.convolution(den, self.alpha) + 1e-4).log()
         x = torch.cat(
             (
                 logn[..., None],
                 lognu[..., None],
                 lognd[..., None],
-                s[..., None],
-                ndv[..., None],
                 glob[:, 0, ...],
                 glob[:, 1, ...],
+                s[..., None],
             ),
             -1,
         )
         x = self.mlp(x)
-
         return self.sign * x.squeeze(-1)
 
 

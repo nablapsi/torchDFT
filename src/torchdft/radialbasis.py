@@ -76,7 +76,7 @@ class RadialBasis(Basis):
         if not P.requires_grad:
             P = P.detach().requires_grad_()
         grid = torch.where(self.grid.isinf(), self.grid.new_zeros(1), self.grid)
-        density = Density(self.density(P), grid, self.dv * self.grid_weights[..., None])
+        density = Density(self.density(P), grid, self.grid_weights[..., None])
         if functional.requires_grad:
             density.grad = self.get_density_gradient(P)
 
