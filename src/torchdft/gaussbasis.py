@@ -150,6 +150,8 @@ class GaussianBasis(Basis):
         (V_func,) = torch.autograd.grad(
             E_func, P, torch.ones_like(E_func), create_graph=create_graph
         )
+        if len(P.shape) == 4:  # spin polarized
+            V_H = V_H.sum(1)
         if not create_graph:
             E_func = E_func.detach()
             V_func = V_func.detach()

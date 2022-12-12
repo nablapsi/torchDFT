@@ -607,10 +607,9 @@ class GradientTrainingTask(TrainingTask):
         vext = Vext.diagonal(dim1=-1, dim2=-2)
         vH = VH.diagonal(dim1=-1, dim2=-2)
         if len(data.P.shape) == 4:  # Spin polarized case.
-            VH = VH.sum(1)
             P = P.sum(1)
             vext = vext[:, None, ...]
-            vH = vH.sum(1)[:, None, ...]
+            vH = vH[:, None, ...]
         laplacian = basis.get_func_laplacian(data.C)
         energybase = ((T + Vext + 5e-1 * VH) * P).flatten(1).sum(-1) + basis.E_nuc
         TVextVH = (-0.5 * laplacian).squeeze(-1) + (vext + vH)[..., None, :] * psi
@@ -735,7 +734,7 @@ class GradientTrainingTaskBasis(TrainingTask):
         if len(data.P.shape) == 4:
             T = T[:, None, ...]
             Vext = Vext[:, None, ...]
-            VH = VH.sum(1)[:, None, ...]
+            VH = VH[:, None, ...]
         TVext = T + Vext
         energybase = ((T + Vext + 5e-1 * VH) * P).flatten(1).sum(-1) + basis.E_nuc
         N = occ.reshape(occ.shape[0], -1).sum(-1)
@@ -763,7 +762,7 @@ class GradientTrainingTaskBasis(TrainingTask):
             P, self.functional, create_graph=self.training
         )
         if len(P.shape) == 4:
-            VH = VH.sum(1)[:, None, ...]
+            VH = VH[:, None, ...]
         F = (data.TVext + VH + Vfunc).unsqueeze(-3)  # Add orbital dimension
         epsilon = (F * (data.C[..., None] * data.C[..., None, :])).sum((-1, -2))
         gi = torch.einsum(

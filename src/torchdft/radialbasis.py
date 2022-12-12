@@ -91,6 +91,8 @@ class RadialBasis(Basis):
         if torch.any(torch.isnan(v_func)):
             raise NanError()
         V_func = v_func.diag_embed()
+        if len(P.shape) == 4:  # spin polarized
+            V_H = V_H.sum(1)
         if self.system.lmax > -1:
             V_H = V_H[..., None, :, :]
             V_func = V_func[..., None, :, :]

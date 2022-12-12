@@ -292,7 +292,7 @@ class UKS(SCFSolver):
         V_H, V_func, E_func = self.basis.get_int_integrals(
             P, self.functional, create_graph=self.create_graph
         )
-        V_H = V_H.sum(1)[:, None, ...]
+        V_H = V_H[:, None, ...]
         F = self.T[:, None, ...] + self.V_ext[:, None, ...] + V_H + V_func
         if self.mixer == "pulay":
             err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
@@ -378,7 +378,6 @@ class ROKS(SCFSolver):
         V_H, V_func, E_func = self.basis.get_int_integrals(
             P, self.functional, create_graph=self.create_graph
         )
-        V_H = V_H.sum(1)
         Fa = self.T + self.V_ext + V_H + V_func[:, 0, ...]
         Fb = self.T + self.V_ext + V_H + V_func[:, 1, ...]
         Pa = P_in[:, 0, ...]

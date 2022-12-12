@@ -111,6 +111,8 @@ class GridBasis(Basis):
         if torch.any(torch.isnan(v_func)):
             raise NanError()
         V_func = v_func.diag_embed()
+        if len(P.shape) == 4:  # spin polarized
+            V_H = V_H.sum(1)
         if not create_graph:
             E_func = E_func.detach()
             V_func = V_func.detach()
