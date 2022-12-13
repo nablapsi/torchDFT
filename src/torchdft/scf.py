@@ -109,7 +109,7 @@ class SCFSolver(ABC):
             if self.mixer_name == "pulay":
                 P_in = P_out
             elif self.mixer_name == "pulaydensity":
-                P_in = self.diis.step(P_in, (P_out - P_in).flatten(1))
+                P_in = self.diis.step(P_in, (P_out - P_in))
             elif self.mixer_name == "linear":
                 P_in = P_in + alpha * (P_out - P_in)
                 alpha = alpha * alpha_decay
@@ -232,7 +232,7 @@ class RKS(SCFSolver):
         )
         F = self.T + self.V_ext + V_H + V_func
         if self.mixer_name == "pulay":
-            err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
+            err = F @ P_in @ self.S - self.S @ P_in @ F
             F = self.diis.step(F, err)
         return F, V_H, V_func, E_func
 
@@ -297,7 +297,7 @@ class UKS(SCFSolver):
         V_H = V_H[:, None, ...]
         F = self.T[:, None, ...] + self.V_ext[:, None, ...] + V_H + V_func
         if self.mixer_name == "pulay":
-            err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
+            err = F @ P_in @ self.S - self.S @ P_in @ F
             F = self.diis.step(F, err)
         return F, V_H, V_func, E_func
 
@@ -380,7 +380,7 @@ class ROKS(UKS):
         )
         F = (F + F.conj().transpose(-1, -2)).unsqueeze(1)
         if self.mixer_name == "pulay":
-            err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
+            err = F @ P_in @ self.S - self.S @ P_in @ F
             F = self.diis.step(F, err)
         return F, V_H.unsqueeze(1), V_func, E_func
 
@@ -423,6 +423,7 @@ class DIIS(DensityMixer):
         return c
 
     def step(self, X: Tensor, err: Tensor) -> Tensor:
+        err = err.flatten(1)
         c = self._get_coeffs(X, err)
         X = torch.stack([X for X, _ in self.history], dim=1)
         err = torch.stack([e for _, e in self.history], dim=1)
