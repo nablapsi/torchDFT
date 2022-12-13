@@ -69,18 +69,18 @@ class SCFSolver(ABC):
         P_guess: Optional[Tensor] = None,
     ) -> SCFSolution:
         """Given a system, evaluates its energy by solving the KS equations."""
-        self.mixer = mixer or DEFAULT_MIXER
+        self.mixer_name = mixer or DEFAULT_MIXER
         self.use_xitorch = use_xitorch
         self.extra_fock_channel = extra_fock_channel
         self.create_graph = create_graph
-        assert self.mixer in {"linear", "pulay", "pulaydensity"}
+        assert self.mixer_name in {"linear", "pulay", "pulaydensity"}
         self.S, self.T, self.V_ext = self.basis.get_core_integrals()
-        if self.mixer in {"pulay", "pulaydensity"}:
+        if self.mixer_name in {"pulay", "pulaydensity"}:
             self.diis = DIIS(**(mixer_kwargs or {}))
         self.S_or_X = self.S if self.use_xitorch else GeneralizedDiagonalizer(self.S).X
         P_in, energy_prev, orbital_energy, C = self.get_init_guess(P_guess)
         for i in iterations or range(max_iterations):
-            F, V_H, V_func, E_func = self.build_fock_matrix(P_in, self.mixer)
+            F, V_H, V_func, E_func = self.build_fock_matrix(P_in, self.mixer_name)
             P_out, acc_orbital_energy, orbital_energy, C = self.ks_iteration(
                 F,
                 self.S_or_X,
@@ -106,11 +106,11 @@ class SCFSolver(ABC):
                 )
             if converged.all():
                 break
-            if self.mixer == "pulay":
+            if self.mixer_name == "pulay":
                 P_in = P_out
-            elif self.mixer == "pulaydensity":
+            elif self.mixer_name == "pulaydensity":
                 P_in = self.diis.step(P_in, (P_out - P_in).flatten(1))
-            elif self.mixer == "linear":
+            elif self.mixer_name == "linear":
                 P_in = P_in + alpha * (P_out - P_in)
                 alpha = alpha * alpha_decay
             energy_prev = energy
@@ -187,7 +187,7 @@ class SCFSolver(ABC):
 
     @abstractmethod
     def build_fock_matrix(
-        self, P_in: Tensor, mixer: str
+        self, P_in: Tensor, mixer_name: str
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         pass
 
@@ -228,14 +228,14 @@ class RKS(SCFSolver):
             return self.ks_iteration(self.T + self.V_ext, self.S_or_X, self.occ)
 
     def build_fock_matrix(
-        self, P_in: Tensor, mixer: str
+        self, P_in: Tensor, mixer_name: str
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         P = P_in.sum(-3) if self.extra_fock_channel else P_in
         V_H, V_func, E_func = self.basis.get_int_integrals(
             P, self.functional, create_graph=self.create_graph
         )
         F = self.T + self.V_ext + V_H + V_func
-        if self.mixer == "pulay":
+        if self.mixer_name == "pulay":
             err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
             F = self.diis.step(F, err)
         return F, V_H, V_func, E_func
@@ -294,7 +294,7 @@ class UKS(SCFSolver):
             )
 
     def build_fock_matrix(
-        self, P_in: Tensor, mixer: str
+        self, P_in: Tensor, mixer_name: str
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         P = P_in.sum(-3) if self.extra_fock_channel else P_in
         V_H, V_func, E_func = self.basis.get_int_integrals(
@@ -302,7 +302,7 @@ class UKS(SCFSolver):
         )
         V_H = V_H[:, None, ...]
         F = self.T[:, None, ...] + self.V_ext[:, None, ...] + V_H + V_func
-        if self.mixer == "pulay":
+        if self.mixer_name == "pulay":
             err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
             F = self.diis.step(F, err)
         return F, V_H, V_func, E_func
@@ -339,7 +339,7 @@ class ROKS(UKS):
     """Restricted open KS solver."""
 
     def build_fock_matrix(
-        self, P_in: Tensor, mixer: str
+        self, P_in: Tensor, mixer_name: str
     ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Build the ROKS Fock matrix.
@@ -387,7 +387,7 @@ class ROKS(UKS):
             + Pv.conj().transpose(-1, -2) @ Fc @ Pc
         )
         F = (F + F.conj().transpose(-1, -2)).unsqueeze(1)
-        if self.mixer == "pulay":
+        if self.mixer_name == "pulay":
             err = (F @ P_in @ self.S - self.S @ P_in @ F).flatten(1)
             F = self.diis.step(F, err)
         return F, V_H.unsqueeze(1), V_func, E_func
