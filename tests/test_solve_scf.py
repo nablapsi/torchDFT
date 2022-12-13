@@ -61,7 +61,7 @@ def test_h2_gauss_pbe():
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
     solver = RKS(basis, occ, PBE())
-    sol = solver.solve(mixer="pulay", density_threshold=1e-9)
+    sol = solver.solve(mixer="pulay", conv_tol={"n": 1e-9})
     assert_allclose(sol.E[0], energy_true)
 
 
@@ -133,9 +133,9 @@ def test_pulaydensity_ks_of():
     H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid)
     solver = RKS(basis, H2.occ("KS,RKS"), Lda1d())
-    sol_ks = solver.solve(mixer="pulaydensity")
+    sol_ks = solver.solve(mixer="pulaydensity", mixer_kwargs={"alpha": 0.5})
     solver = RKS(basis, H2.occ("OF,RKS"), Lda1d())
-    sol_of = solver.solve(mixer="pulaydensity")
+    sol_of = solver.solve(mixer="pulaydensity", mixer_kwargs={"alpha": 0.5})
     assert_allclose(sol_ks.P, sol_of.P)
     assert_allclose(sol_ks.E, sol_of.E)
 
@@ -147,9 +147,13 @@ def test_pulaydensity_ks_of_noxitorch():
     H2 = System(Z=Z, centers=centers)
     basis = GridBasis(H2, grid)
     solver = RKS(basis, H2.occ("KS,RKS"), Lda1d())
-    sol_ks = solver.solve(use_xitorch=False, mixer="pulaydensity")
+    sol_ks = solver.solve(
+        use_xitorch=False, mixer="pulaydensity", mixer_kwargs={"alpha": 0.5}
+    )
     solver = RKS(basis, H2.occ("OF,RKS"), Lda1d())
-    sol_of = solver.solve(use_xitorch=False, mixer="pulaydensity")
+    sol_of = solver.solve(
+        use_xitorch=False, mixer="pulaydensity", mixer_kwargs={"alpha": 0.5}
+    )
     assert_allclose(sol_ks.P, sol_of.P)
     assert_allclose(sol_ks.E, sol_of.E)
 
@@ -163,7 +167,9 @@ def test_pulaydensity_h2_gauss():
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
     solver = RKS(basis, occ, LdaPw92())
-    sol = solver.solve(mixer="pulaydensity", use_xitorch=True)
+    sol = solver.solve(
+        mixer="pulaydensity", use_xitorch=True, mixer_kwargs={"alpha": 0.5}
+    )
     assert_allclose(sol.E[0], energy_true)
 
 
@@ -176,7 +182,9 @@ def test_pulaydensity_h2_gauss_noxitorch():
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
     solver = RKS(basis, occ, LdaPw92())
-    sol = solver.solve(mixer="pulaydensity", use_xitorch=False)
+    sol = solver.solve(
+        mixer="pulaydensity", use_xitorch=False, mixer_kwargs={"alpha": 0.5}
+    )
     assert_allclose(sol.E[0], energy_true)
 
 
@@ -188,7 +196,7 @@ def test_pulaydensity_h2_gauss_pbe():
     occ = torch.tensor([[2]])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    mixer_kwargs = {"precondition": False, "regularization": 0}
+    mixer_kwargs = {"precondition": False, "regularization": 0, "alpha": 0.5}
     solver = RKS(
         basis,
         occ,
@@ -210,7 +218,7 @@ def test_pulaydensity_h2_gauss_pbe_noxitorch():
     occ = torch.tensor([2])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    mixer_kwargs = {"precondition": False, "regularization": 0}
+    mixer_kwargs = {"precondition": False, "regularization": 0, "alpha": 0.5}
     solver = RKS(
         basis,
         occ,
@@ -229,7 +237,7 @@ def test_Li_radialbasis():
     mol = gto.M(atom="Li 0 0 0", basis="cc-pv5z", verbose=3, spin=1)
     basis = GaussianBasis(mol)
     solver = RKS(basis, torch.tensor([[2, 1]]), LdaPw92())
-    sol_truth = solver.solve(mixer="pulay", density_threshold=1e-9)
+    sol_truth = solver.solve(mixer="pulay", conv_tol={"n": 1e-9})
 
     # RadialBasis Li energy
     grid = RadialGrid(end=10, dx=1e-2)
@@ -242,7 +250,7 @@ def test_Li_radialbasis():
     )
     sol = solver.solve(
         mixer="pulay",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
     )
     assert_allclose(sol.E, sol_truth.E, atol=1.6e-3, rtol=1e-4)
@@ -258,7 +266,7 @@ def test_Be_C_radialbasis_pulay():
     )
     basis = RadialBasis(system, grid)
     solver = RKS(basis, system.occ("aufbau,RKS"), LdaPw92())
-    sol = solver.solve(mixer="pulay", density_threshold=1e-9, extra_fock_channel=True)
+    sol = solver.solve(mixer="pulay", conv_tol={"n": 1e-9}, extra_fock_channel=True)
     assert_allclose(sol.E, torch.tensor([-14.4447894200, -37.4198234193]))
 
 
@@ -279,8 +287,9 @@ def test_batched_radialbasis():
     )
     sol_Li = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
     )
     solver = RKS(
         Cbasis,
@@ -289,8 +298,9 @@ def test_batched_radialbasis():
     )
     sol_C = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
     )
     solver = RKS(
         batchedbasis,
@@ -299,8 +309,9 @@ def test_batched_radialbasis():
     )
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
     )
 
     assert_allclose(sol_Li.E[0], sol.E[0])
@@ -322,7 +333,7 @@ def test_UKS_gaussbasis_C():
         torch.from_numpy(scf.uhf.get_occ(mf)),
         LdaPw92(),
     )
-    sol = solver.solve(print_iterations=1, density_threshold=1e-6, mixer="pulay")
+    sol = solver.solve(print_iterations=1, conv_tol={"n": 1e-6}, mixer="pulay")
     assert_allclose(E0, sol.E[0])
 
 
@@ -341,7 +352,7 @@ def test_UKS_gaussbasis_N():
     )
     sol = solver.solve(
         print_iterations=1,
-        density_threshold=1e-6,
+        conv_tol={"n": 1e-6},
         mixer="pulay",
     )
     assert_allclose(E0, sol.E[0])
@@ -360,7 +371,7 @@ def test_ROKS_gaussbasis_C():
         torch.tensor([[[1, 1, 1, 1], [1, 1, 0, 0]]]),
         LdaPw92(),
     )
-    sol = solver.solve(print_iterations=1, density_threshold=1e-6, mixer="pulay")
+    sol = solver.solve(print_iterations=1, conv_tol={"n": 1e-6}, mixer="pulay")
     assert_allclose(E0, sol.E[0])
 
 
@@ -379,7 +390,7 @@ def test_ROKS_gaussbasis_N():
     )
     sol = solver.solve(
         print_iterations=1,
-        density_threshold=1e-6,
+        conv_tol={"n": 1e-6},
         mixer="pulay",
     )
     assert_allclose(E0, sol.E[0])
@@ -399,8 +410,9 @@ def test_solve_batch_grid():
     )
     sol1 = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
     )
 
     # Grid 2
@@ -413,8 +425,9 @@ def test_solve_batch_grid():
     )
     sol2 = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
     )
 
     # Batch grid
@@ -433,8 +446,9 @@ def test_solve_batch_grid():
     )
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
     )
     assert_allclose(sol1.E[0], sol.E[0])
     assert_allclose(sol2.E[0], sol.E[1])
@@ -451,7 +465,8 @@ def test_B_N_radialbasis_pulay_UKS():
     )
     basis = RadialBasis(system, grid)
     solver = UKS(basis, system.occ("aufbau,UKS"), LdaPw92())
-    sol = solver.solve(mixer="pulay", density_threshold=1e-9, extra_fock_channel=True)
+    sol = solver.solve(mixer="pulay", conv_tol={"n": 1e-9}, extra_fock_channel=True)
+    print(sol.E)
     assert_allclose(
         sol.E, torch.tensor([-7.3414279159, -24.3494437516, -54.1287927509])
     )
@@ -468,7 +483,7 @@ def test_B_N_radialbasis_pulay_ROKS():
     )
     basis = RadialBasis(system, grid)
     solver = ROKS(basis, system.occ("aufbau,ROKS"), LdaPw92())
-    sol = solver.solve(mixer="pulay", density_threshold=1e-9, extra_fock_channel=True)
+    sol = solver.solve(mixer="pulay", conv_tol={"n": 1e-9}, extra_fock_channel=True)
     assert_allclose(
         sol.E, torch.tensor([-7.3414217792, -24.3492748850, -54.1272344935])
     )

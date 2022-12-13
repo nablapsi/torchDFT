@@ -160,7 +160,8 @@ def test_radial_scfmetrics():
 
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
 
     ref_data = SCFData(sol.E, sol.P)
@@ -172,10 +173,10 @@ def test_radial_scfmetrics():
         functional=LdaPw92(),
         make_solver=RKS,
         steps=10,
-        mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
     )
     metrics = task.metrics_fn(task.data)
+    print(metrics)
     assert_allclose(metrics["loss"], 0e0)
 
 
@@ -192,7 +193,8 @@ def test_radial_gradmetrics():
 
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
 
     ref_data = SCFData(sol.E, sol.P, sol.C)
@@ -227,7 +229,8 @@ def test_batchradial_scfmetrics():
 
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
+        mixer_kwargs={"alpha": 0.5},
     )
 
     ref_data = SCFData(sol.E, sol.P)
@@ -240,7 +243,8 @@ def test_batchradial_scfmetrics():
         make_solver=RKS,
         steps=10,
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
     metrics = task.metrics_fn(task.data)
     assert_allclose(metrics["loss"], 0e0)
@@ -263,7 +267,8 @@ def test_batchradial_gradmetrics():
 
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
 
     ref_data = SCFData(sol.E, sol.P, sol.C)
@@ -293,7 +298,8 @@ def test_grid_scfmetrics():
 
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
 
     ref_data = SCFData(sol.E, sol.P)
@@ -306,7 +312,8 @@ def test_grid_scfmetrics():
         make_solver=RKS,
         steps=10,
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
     metrics = task.metrics_fn(task.data)
     assert_allclose(metrics["loss"], 0e0)
@@ -324,7 +331,8 @@ def test_grid_gradmetrics():
 
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
 
     ref_data = SCFData(sol.E, sol.P, sol.C)
@@ -359,7 +367,8 @@ def test_batchgrid_scfmetrics():
 
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
 
     ref_data = SCFData(sol.E, sol.P, sol.C)
@@ -372,7 +381,8 @@ def test_batchgrid_scfmetrics():
         make_solver=RKS,
         steps=10,
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
     metrics = task.metrics_fn(task.data)
     assert_allclose(metrics["loss"], 0e0)
@@ -395,7 +405,8 @@ def test_batchgrid_gradmetrics():
 
     sol = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        mixer_kwargs={"alpha": 0.5},
+        conv_tol={"n": 1e-9},
     )
 
     ref_data = SCFData(sol.E, sol.P, sol.C)
