@@ -81,19 +81,28 @@ class SCFSolver(ABC):
             self.mixer = LinearMixer(**(mixer_kwargs or {}))
         self.S_or_X = self.S if self.use_xitorch else GeneralizedDiagonalizer(self.S).X
         P_in, energy_prev, orbital_energy, C = self.get_init_guess(P_guess)
+        P = P_in.sum(-3) if self.extra_fock_channel else P_in
+        VH, Vfunc, Efunc = self.basis.get_int_integrals(
+            P, self.functional, create_graph=self.create_graph
+        )
+        energy_prev = self.total_energy(P_in, VH, Efunc)
         for i in iterations or range(max_iterations):
-            F, V_H, V_func, E_func = self.build_fock_matrix(P_in)
+            F = self.build_fock_matrix(P_in, VH, Vfunc)
             P_out, acc_orbital_energy, orbital_energy, C = self.ks_iteration(
                 F,
                 self.S_or_X,
                 self.occ,
             )
+            if self.mixer_name in ["pulaydensity" or "linear"]:
+                P_out = self.mixer.step(P_in, (P_out - P_in))
             density_diff, converged = self.check_convergence(
                 P_in, P_out, density_threshold
             )
-            energy = self.get_total_energy(
-                P_in, V_H, V_func, E_func, acc_orbital_energy
+            P = P_out.sum(-3) if self.extra_fock_channel else P_out
+            VH, Vfunc, Efunc = self.basis.get_int_integrals(
+                P, self.functional, create_graph=self.create_graph
             )
+            energy = self.total_energy(P_out, VH, Efunc)
             if tape is not None:
                 tape.append((P_out, energy))
             if (
@@ -108,10 +117,7 @@ class SCFSolver(ABC):
                 )
             if converged.all():
                 break
-            if self.mixer_name == "pulay":
-                P_in = P_out
-            elif self.mixer_name in ["pulaydensity", "linear"]:
-                P_in = self.mixer.step(P_in, (P_out - P_in))
+            P_in = P_out
             energy_prev = energy
         else:
             P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
@@ -185,24 +191,17 @@ class SCFSolver(ABC):
         pass
 
     @abstractmethod
-    def build_fock_matrix(self, P_in: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        pass
-
-    @abstractmethod
-    def get_total_energy(
-        self,
-        P_in: Tensor,
-        V_H: Tensor,
-        V_func: Tensor,
-        E_func: Tensor,
-        acc_orbital_energy: Tensor,
-    ) -> Tensor:
+    def build_fock_matrix(self, P_in: Tensor, V_H: Tensor, V_func: Tensor) -> Tensor:
         pass
 
     @abstractmethod
     def check_convergence(
         self, P_in: Tensor, P_out: Tensor, density_threshold: float
     ) -> Tuple[Tensor, Tensor]:
+        pass
+
+    @abstractmethod
+    def total_energy(self, P: Tensor, VH: Tensor, Efunc: Tensor) -> Tensor:
         pass
 
 
@@ -224,32 +223,12 @@ class RKS(SCFSolver):
         else:
             return self.ks_iteration(self.T + self.V_ext, self.S_or_X, self.occ)
 
-    def build_fock_matrix(self, P_in: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        P = P_in.sum(-3) if self.extra_fock_channel else P_in
-        V_H, V_func, E_func = self.basis.get_int_integrals(
-            P, self.functional, create_graph=self.create_graph
-        )
+    def build_fock_matrix(self, P_in: Tensor, V_H: Tensor, V_func: Tensor) -> Tensor:
         F = self.T + self.V_ext + V_H + V_func
         if self.mixer_name == "pulay":
             err = F @ P_in @ self.S - self.S @ P_in @ F
             F = self.mixer.step(F, err)
-        return F, V_H, V_func, E_func
-
-    def get_total_energy(
-        self,
-        P_in: Tensor,
-        V_H: Tensor,
-        V_func: Tensor,
-        E_func: Tensor,
-        acc_orbital_energy: Tensor,
-    ) -> Tensor:
-        P = P_in.sum(-3) if self.extra_fock_channel else P_in
-        return (
-            acc_orbital_energy
-            + E_func
-            - ((V_H / 2 + V_func).squeeze() * P).sum((-2, -1))
-            + self.basis.E_nuc
-        )
+        return F
 
     def check_convergence(
         self, P_in: Tensor, P_out: Tensor, density_threshold: float
@@ -258,6 +237,13 @@ class RKS(SCFSolver):
         P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
         density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
         return density_diff, density_diff < density_threshold
+
+    def total_energy(self, P: Tensor, VH: Tensor, Efunc: Tensor) -> Tensor:
+        return (
+            ((self.T + self.V_ext + 0.5 * VH) * P).flatten(1).sum(-1)
+            + Efunc
+            + self.basis.E_nuc
+        )
 
 
 class UKS(SCFSolver):
@@ -288,34 +274,13 @@ class UKS(SCFSolver):
                 C,
             )
 
-    def build_fock_matrix(self, P_in: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        P = P_in.sum(-3) if self.extra_fock_channel else P_in
-        V_H, V_func, E_func = self.basis.get_int_integrals(
-            P, self.functional, create_graph=self.create_graph
-        )
+    def build_fock_matrix(self, P_in: Tensor, V_H: Tensor, V_func: Tensor) -> Tensor:
         V_H = V_H[:, None, ...]
         F = self.T[:, None, ...] + self.V_ext[:, None, ...] + V_H + V_func
         if self.mixer_name == "pulay":
             err = F @ P_in @ self.S - self.S @ P_in @ F
             F = self.mixer.step(F, err)
-        return F, V_H, V_func, E_func
-
-    def get_total_energy(
-        self,
-        P_in: Tensor,
-        V_H: Tensor,
-        V_func: Tensor,
-        E_func: Tensor,
-        acc_orbital_energy: Tensor,
-    ) -> Tensor:
-        P = P_in.sum(-3) if self.extra_fock_channel else P_in
-        energy = (
-            acc_orbital_energy.sum(-1)
-            + E_func
-            - ((V_H / 2 + V_func).squeeze() * P).sum((-3, -2, -1))
-            + self.basis.E_nuc
-        )
-        return energy
+        return F
 
     def check_convergence(
         self, P_in: Tensor, P_out: Tensor, density_threshold: float
@@ -327,11 +292,18 @@ class UKS(SCFSolver):
         density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
         return density_diff, density_diff < density_threshold
 
+    def total_energy(self, P: Tensor, VH: Tensor, Efunc: Tensor) -> Tensor:
+        return (
+            ((self.T + self.V_ext + 0.5 * VH) * P.sum(1)).flatten(1).sum(-1)
+            + Efunc
+            + self.basis.E_nuc
+        )
+
 
 class ROKS(UKS):
     """Restricted open KS solver."""
 
-    def build_fock_matrix(self, P_in: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def build_fock_matrix(self, P_in: Tensor, V_H: Tensor, V_func: Tensor) -> Tensor:
         """
         Build the ROKS Fock matrix.
 
@@ -381,7 +353,7 @@ class ROKS(UKS):
         if self.mixer_name == "pulay":
             err = F @ P_in @ self.S - self.S @ P_in @ F
             F = self.mixer.step(F, err)
-        return F, V_H.unsqueeze(1), V_func, E_func
+        return F
 
 
 class DIIS(DensityMixer):
