@@ -101,7 +101,7 @@ class SCFSolver(ABC):
             if self.mixer == "pulay":
                 P_in = P_out
             elif self.mixer == "pulaydensity":
-                P_in = self.diis.step(P_in, (P_out - P_in).flatten(1), alpha)
+                P_in = self.diis.step(P_in, (P_out - P_in).flatten(1))
             elif self.mixer == "linear":
                 P_in = P_in + alpha * (P_out - P_in)
                 alpha = alpha * alpha_decay
@@ -393,12 +393,14 @@ class DIIS:
         max_history: int = 10,
         precondition: bool = False,
         regularization: float = 0e0,
+        alpha: Optional[float] = None,
     ) -> None:
         assert not (regularization and not precondition)
         self.max_history = max_history
         self.precondition = precondition
         self.regularization = regularization
         self.history: List[Tuple[Tensor, Tensor]] = []
+        self.alpha = alpha
 
     def _get_coeffs(self, X: Tensor, err: Tensor) -> Tensor:
         self.history.append((X, err))
@@ -420,11 +422,11 @@ class DIIS:
         c = torch.cat([-c[..., :1], -c.diff(dim=-1), 1 + c[..., -1:]], dim=-1)
         return c
 
-    def step(self, X: Tensor, err: Tensor, alpha: Optional[float] = None) -> Tensor:
+    def step(self, X: Tensor, err: Tensor) -> Tensor:
         c = self._get_coeffs(X, err)
         X = torch.stack([X for X, _ in self.history], dim=1)
         err = torch.stack([e for _, e in self.history], dim=1)
-        if alpha is not None:
-            X = X + alpha * err.view(X.shape)
+        if self.alpha is not None:
+            X = X + self.alpha * err.view(X.shape)
         X = torch.einsum("bi,bi...->b...", c, X)
         return X
