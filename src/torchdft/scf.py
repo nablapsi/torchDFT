@@ -438,3 +438,14 @@ class DIIS(DensityMixer):
             X = X + self.alpha * err.view(X.shape)
         X = torch.einsum("bi,bi...->b...", c, X)
         return X
+
+
+class LinearMixer(DensityMixer):
+    def __init__(self, alpha: float = 0.5, alpha_decay: float = 1.0):
+        self.alpha = alpha
+        self.alpha_decay = alpha_decay
+
+    def step(self, P: Tensor, err: Tensor) -> Tensor:
+        P_out = P + self.alpha * err
+        self.alpha *= self.alpha_decay
+        return P_out
