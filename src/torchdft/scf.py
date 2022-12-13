@@ -31,6 +31,14 @@ class SCFSolution:
     converged: Tensor
 
 
+class DensityMixer:
+    """Generic class for density mixers"""
+
+    @abstractmethod
+    def step(self, P: Tensor, err: Tensor) -> Tensor:
+        pass
+
+
 class SCFSolver(ABC):
     """Generic class for SCF solvers."""
 
