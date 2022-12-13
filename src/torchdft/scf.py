@@ -16,6 +16,7 @@ from .functional import Functional
 from .utils import GeneralizedDiagonalizer
 
 DEFAULT_MIXER = "linear"
+CONV_TOL = {"E": 0.0, "n": 1e-4}
 
 
 @dataclass
@@ -58,7 +59,7 @@ class SCFSolver(ABC):
         self,
         max_iterations: int = 100,
         iterations: Optional[Iterable[int]] = None,
-        density_threshold: float = 1e-4,
+        conv_tol: Optional[Dict[str, float]] = None,
         print_iterations: Union[bool, int] = False,
         tape: Optional[List[Tuple[Tensor, Tensor]]] = None,
         create_graph: bool = False,
@@ -73,6 +74,9 @@ class SCFSolver(ABC):
         self.use_xitorch = use_xitorch
         self.extra_fock_channel = extra_fock_channel
         self.create_graph = create_graph
+        self.conv_tol = CONV_TOL.copy()
+        if conv_tol is not None:
+            self.conv_tol.update(conv_tol)
         assert self.mixer_name in {"linear", "pulay", "pulaydensity"}
         self.S, self.T, self.V_ext = self.basis.get_core_integrals()
         if self.mixer_name in {"pulay", "pulaydensity"}:
@@ -95,14 +99,14 @@ class SCFSolver(ABC):
             )
             if self.mixer_name in ["pulaydensity" or "linear"]:
                 P_out = self.mixer.step(P_in, (P_out - P_in))
-            density_diff, converged = self.check_convergence(
-                P_in, P_out, density_threshold
-            )
             P = P_out.sum(-3) if self.extra_fock_channel else P_out
             VH, Vfunc, Efunc = self.basis.get_int_integrals(
                 P, self.functional, create_graph=self.create_graph
             )
             energy = self.total_energy(P_out, VH, Efunc)
+            density_diff, converged = self.check_convergence(
+                P_in, P_out, energy_prev, energy
+            )
             if tape is not None:
                 tape.append((P_out, energy))
             if (
@@ -129,7 +133,7 @@ class SCFSolver(ABC):
                     acc_orbital_energy=acc_orbital_energy,
                     orbital_energy=orbital_energy,
                     C=C,
-                    converged=density_diff < density_threshold,
+                    converged=converged,
                 )
             )
         P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
@@ -140,7 +144,7 @@ class SCFSolver(ABC):
             acc_orbital_energy=acc_orbital_energy,
             orbital_energy=orbital_energy,
             C=C,
-            converged=density_diff < density_threshold,
+            converged=converged,
         )
 
     def eig(self, F: Tensor, S: Tensor) -> Tuple[Tensor, Tensor]:
@@ -196,7 +200,7 @@ class SCFSolver(ABC):
 
     @abstractmethod
     def check_convergence(
-        self, P_in: Tensor, P_out: Tensor, density_threshold: float
+        self, P_in: Tensor, P_out: Tensor, energy_prev: Tensor, energy: Tensor
     ) -> Tuple[Tensor, Tensor]:
         pass
 
@@ -231,12 +235,18 @@ class RKS(SCFSolver):
         return F
 
     def check_convergence(
-        self, P_in: Tensor, P_out: Tensor, density_threshold: float
+        self, P_in: Tensor, P_out: Tensor, energy_prev: Tensor, energy: Tensor
     ) -> Tuple[Tensor, Tensor]:
         P_in = P_in.sum(-3) if self.extra_fock_channel else P_in
         P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
         density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
-        return density_diff, density_diff < density_threshold
+        deltaE = (energy_prev - energy).abs()
+        return (
+            density_diff,
+            torch.logical_or(
+                density_diff < self.conv_tol["n"], deltaE < self.conv_tol["E"]
+            ),
+        )
 
     def total_energy(self, P: Tensor, VH: Tensor, Efunc: Tensor) -> Tensor:
         return (
@@ -283,14 +293,20 @@ class UKS(SCFSolver):
         return F
 
     def check_convergence(
-        self, P_in: Tensor, P_out: Tensor, density_threshold: float
+        self, P_in: Tensor, P_out: Tensor, energy_prev: Tensor, energy: Tensor
     ) -> Tuple[Tensor, Tensor]:
         P_out = P_out.sum(1)
         P_in = P_in.sum(1)
         P_in = P_in.sum(-3) if self.extra_fock_channel else P_in
         P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
         density_diff = self.basis.density_mse(self.basis.density(P_out - P_in)).sqrt()
-        return density_diff, density_diff < density_threshold
+        deltaE = (energy_prev - energy).abs()
+        return (
+            density_diff,
+            torch.logical_or(
+                density_diff < self.conv_tol["n"], deltaE < self.conv_tol["E"]
+            ),
+        )
 
     def total_energy(self, P: Tensor, VH: Tensor, Efunc: Tensor) -> Tensor:
         return (
