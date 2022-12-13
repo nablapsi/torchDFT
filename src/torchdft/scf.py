@@ -80,7 +80,7 @@ class SCFSolver(ABC):
         self.S_or_X = self.S if self.use_xitorch else GeneralizedDiagonalizer(self.S).X
         P_in, energy_prev, orbital_energy, C = self.get_init_guess(P_guess)
         for i in iterations or range(max_iterations):
-            F, V_H, V_func, E_func = self.build_fock_matrix(P_in, self.mixer_name)
+            F, V_H, V_func, E_func = self.build_fock_matrix(P_in)
             P_out, acc_orbital_energy, orbital_energy, C = self.ks_iteration(
                 F,
                 self.S_or_X,
@@ -186,9 +186,7 @@ class SCFSolver(ABC):
         pass
 
     @abstractmethod
-    def build_fock_matrix(
-        self, P_in: Tensor, mixer_name: str
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def build_fock_matrix(self, P_in: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         pass
 
     @abstractmethod
@@ -227,9 +225,7 @@ class RKS(SCFSolver):
         else:
             return self.ks_iteration(self.T + self.V_ext, self.S_or_X, self.occ)
 
-    def build_fock_matrix(
-        self, P_in: Tensor, mixer_name: str
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def build_fock_matrix(self, P_in: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         P = P_in.sum(-3) if self.extra_fock_channel else P_in
         V_H, V_func, E_func = self.basis.get_int_integrals(
             P, self.functional, create_graph=self.create_graph
@@ -293,9 +289,7 @@ class UKS(SCFSolver):
                 C,
             )
 
-    def build_fock_matrix(
-        self, P_in: Tensor, mixer_name: str
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def build_fock_matrix(self, P_in: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         P = P_in.sum(-3) if self.extra_fock_channel else P_in
         V_H, V_func, E_func = self.basis.get_int_integrals(
             P, self.functional, create_graph=self.create_graph
@@ -338,9 +332,7 @@ class UKS(SCFSolver):
 class ROKS(UKS):
     """Restricted open KS solver."""
 
-    def build_fock_matrix(
-        self, P_in: Tensor, mixer_name: str
-    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+    def build_fock_matrix(self, P_in: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Build the ROKS Fock matrix.
 
