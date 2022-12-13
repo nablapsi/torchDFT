@@ -393,7 +393,7 @@ class ROKS(UKS):
         return F, V_H.unsqueeze(1), V_func, E_func
 
 
-class DIIS:
+class DIIS(DensityMixer):
     """DIIS class."""
 
     def __init__(
