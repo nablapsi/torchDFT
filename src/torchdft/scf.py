@@ -42,6 +42,8 @@ class DensityMixer:
 class SCFSolver(ABC):
     """Generic class for SCF solvers."""
 
+    mixer: DensityMixer
+
     def __init__(
         self,
         basis: Basis,
@@ -54,8 +56,6 @@ class SCFSolver(ABC):
 
     def solve(  # noqa: C901 TODO too complex
         self,
-        alpha: float = 0.5,
-        alpha_decay: float = 1.0,
         max_iterations: int = 100,
         iterations: Optional[Iterable[int]] = None,
         density_threshold: float = 1e-4,
@@ -76,7 +76,9 @@ class SCFSolver(ABC):
         assert self.mixer_name in {"linear", "pulay", "pulaydensity"}
         self.S, self.T, self.V_ext = self.basis.get_core_integrals()
         if self.mixer_name in {"pulay", "pulaydensity"}:
-            self.diis = DIIS(**(mixer_kwargs or {}))
+            self.mixer = DIIS(**(mixer_kwargs or {}))
+        elif self.mixer_name == "linear":
+            self.mixer = LinearMixer(**(mixer_kwargs or {}))
         self.S_or_X = self.S if self.use_xitorch else GeneralizedDiagonalizer(self.S).X
         P_in, energy_prev, orbital_energy, C = self.get_init_guess(P_guess)
         for i in iterations or range(max_iterations):
@@ -108,11 +110,8 @@ class SCFSolver(ABC):
                 break
             if self.mixer_name == "pulay":
                 P_in = P_out
-            elif self.mixer_name == "pulaydensity":
-                P_in = self.diis.step(P_in, (P_out - P_in))
-            elif self.mixer_name == "linear":
-                P_in = P_in + alpha * (P_out - P_in)
-                alpha = alpha * alpha_decay
+            elif self.mixer_name in ["pulaydensity", "linear"]:
+                P_in = self.mixer.step(P_in, (P_out - P_in))
             energy_prev = energy
         else:
             P_out = P_out.sum(-3) if self.extra_fock_channel else P_out
@@ -233,7 +232,7 @@ class RKS(SCFSolver):
         F = self.T + self.V_ext + V_H + V_func
         if self.mixer_name == "pulay":
             err = F @ P_in @ self.S - self.S @ P_in @ F
-            F = self.diis.step(F, err)
+            F = self.mixer.step(F, err)
         return F, V_H, V_func, E_func
 
     def get_total_energy(
@@ -298,7 +297,7 @@ class UKS(SCFSolver):
         F = self.T[:, None, ...] + self.V_ext[:, None, ...] + V_H + V_func
         if self.mixer_name == "pulay":
             err = F @ P_in @ self.S - self.S @ P_in @ F
-            F = self.diis.step(F, err)
+            F = self.mixer.step(F, err)
         return F, V_H, V_func, E_func
 
     def get_total_energy(
@@ -381,7 +380,7 @@ class ROKS(UKS):
         F = (F + F.conj().transpose(-1, -2)).unsqueeze(1)
         if self.mixer_name == "pulay":
             err = F @ P_in @ self.S - self.S @ P_in @ F
-            F = self.diis.step(F, err)
+            F = self.mixer.step(F, err)
         return F, V_H.unsqueeze(1), V_func, E_func
 
 
