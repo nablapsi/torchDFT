@@ -592,7 +592,7 @@ class NDVNConvNetLogGrid(Functional):
     def forward(self, den: Density) -> Tensor:
         n = den.value
         glob = self.convolution(den, self.alpha)
-        x = torch.cat(((n[..., None] + 1e-4).log(), glob), -1)
+        x = torch.cat(((n[..., None] + 1e-4).log(), (glob + 1e-4).log()), -1)
         x = self.mlp(x)
         return self.sign * x.squeeze(-1)
 
