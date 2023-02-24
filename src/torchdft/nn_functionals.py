@@ -737,3 +737,33 @@ class PolarizedLDANet(Functional):
         x = torch.cat((logn[..., None], s[..., None]), -1)
         x = self.mlp(x)
         return self.sign * x.squeeze(-1)
+
+
+class LDANet(Functional):
+    """Trainable functional with [log(n)] features."""
+
+    def __init__(
+        self,
+        negative_transform: bool = False,
+    ) -> None:
+        super().__init__()
+
+        self.requires_grad = False
+        self.sign = -1 if negative_transform else 1
+
+        self.mlp = nn.Sequential(
+            nn.Linear(1, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 60),
+            nn.SiLU(),
+            nn.Linear(60, 1),
+            nn.Softplus(),
+        )
+
+    def forward(self, den: Density) -> Tensor:
+        n = den.density
+        logn = (n + 1e-4).log()
+        x = self.mlp(logn.unsqueeze(-1))
+        return self.sign * x.squeeze(-1)
