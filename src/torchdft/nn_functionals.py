@@ -342,9 +342,7 @@ class NDVNConvNet(Functional):
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
         self.N = N
-        self.register_buffer(
-            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
-        )
+        self.register_buffer("alpha", torch.logspace(minN, maxN, self.N))
 
         self.mlp = nn.Sequential(
             nn.Linear(self.N + 2, 60),
@@ -390,9 +388,7 @@ class NDVNConvLogNet(Functional):
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
         self.N = N
-        self.register_buffer(
-            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
-        )
+        self.register_buffer("alpha", torch.logspace(minN, maxN, self.N))
 
         self.mlp = nn.Sequential(
             nn.Linear(self.N + 2, 60),
@@ -484,9 +480,7 @@ class NDVNConvNetGrid(Functional):
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
         self.N = N
-        self.register_buffer(
-            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
-        )
+        self.register_buffer("alpha", torch.logspace(minN, maxN, self.N))
 
         self.mlp = nn.Sequential(
             nn.Linear(self.N + 1, 60),
@@ -575,9 +569,7 @@ class NDVNConvNetLogGrid(Functional):
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
         self.N = N
-        self.register_buffer(
-            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
-        )
+        self.register_buffer("alpha", torch.logspace(minN, maxN, self.N))
 
         self.mlp = nn.Sequential(
             nn.Linear(self.N + 1, 60),
@@ -622,9 +614,7 @@ class NDVNConvLogPolarizedNet(Functional):
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
         self.N = N
-        self.register_buffer(
-            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
-        )
+        self.register_buffer("alpha", torch.logspace(minN, maxN, self.N))
 
         self.mlp = nn.Sequential(
             nn.Linear(self.N + 3, 60),
@@ -674,9 +664,7 @@ class NDVNConvLogPolarizedNet2(Functional):
         self.requires_grad = False
         self.sign = -1 if negative_transform else 1
         self.N = N
-        self.register_buffer(
-            "alpha", torch.logspace(minN, maxN, self.N), persistent=False
-        )
+        self.register_buffer("alpha", torch.logspace(minN, maxN, self.N))
 
         self.mlp = nn.Sequential(
             nn.Linear(2 * self.N + 4, 60),
