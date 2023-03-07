@@ -598,15 +598,15 @@ class NDVNConvNetLogGrid(Functional):
 
 
 class NDVNConvLogPolarizedNet(Functional):
-    """KEF with [log(n), 4pin, conv(n)] features."""
+    """KEF with [log(nu), log(nd), conv(nu), conv(nd)] features."""
 
     alpha: Tensor
 
     def __init__(
         self,
-        N: int = 2,
+        N: int = 6,
         minN: float = -3.0,
-        maxN: float = -1.0,
+        maxN: float = 0.0,
         negative_transform: bool = False,
     ) -> None:
         super().__init__()
@@ -617,7 +617,7 @@ class NDVNConvLogPolarizedNet(Functional):
         self.register_buffer("alpha", torch.logspace(minN, maxN, self.N))
 
         self.mlp = nn.Sequential(
-            nn.Linear(self.N + 3, 60),
+            nn.Linear(2 * self.N + 2, 60),
             nn.SiLU(),
             nn.Linear(60, 60),
             nn.SiLU(),
@@ -628,21 +628,26 @@ class NDVNConvLogPolarizedNet(Functional):
         )
 
     def convolution(self, den: Density, alpha: Tensor) -> Tensor:
+        n = torch.stack((den.nu, den.nd), dim=1)
         g = (den.grid[..., :, None] - den.grid[..., None, :]) ** 2
         expo = (-0.5 * g[..., :, :, None] / alpha[None, None, :]).exp() / (
             2e0 * torch.pi * alpha[None, None, :]
         ).sqrt()
-        return torch.einsum(
-            "...ijk, ...j-> ...ik", expo, den.density * den.grid_weights
-        )
+        return torch.einsum("...ijk, ...j-> ...ik", expo, n * den.grid_weights)
 
     def forward(self, den: Density) -> Tensor:
-        n = den.nu + den.nd
-        s = (den.nu - den.nd) / n
-        logn = (n + 1e-4).log()
-        ndv = den.density * 4e0 * torch.pi * den.grid**2
-        glob = self.convolution(den, self.alpha)
-        x = torch.cat((logn[..., None], s[..., None], ndv[..., None], glob), -1)
+        lognu = (den.nu + 1e-4).log()
+        lognd = (den.nd + 1e-4).log()
+        glob = (self.convolution(den, self.alpha) + 1e-4).log()
+        x = torch.cat(
+            (
+                lognu[..., None],
+                lognd[..., None],
+                glob[:, 0, ...],
+                glob[:, 1, ...],
+            ),
+            -1,
+        )
         x = self.mlp(x)
         return self.sign * x.squeeze(-1)
 
