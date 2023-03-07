@@ -431,17 +431,15 @@ class TrainingTask(nn.Module, ABC):
                         scheduler.step()
                     if loss < loss_threshold:
                         break
-            if self.minibatchsize is not None:
-                self.minibatchsize = None
-                log.info("Switching off minibatch for LBFGS optimizer")
-            opt = torch.optim.LBFGS(
-                self.functional.parameters(),
-                line_search_fn="strong_wolfe",
-                max_eval=self.steps - _adam_steps,
-                max_iter=self.steps - _adam_steps,
-                tolerance_change=0e0,
-            )
-            opt.step(closure)
+            if self.minibatchsize is None:
+                opt = torch.optim.LBFGS(
+                    self.functional.parameters(),
+                    line_search_fn="strong_wolfe",
+                    max_eval=self.steps - _adam_steps,
+                    max_iter=self.steps - _adam_steps,
+                    tolerance_change=0e0,
+                )
+                opt.step(closure)
         torch.save(metrics, workdir / "metrics.pt")
         chkpt.replace(self.functional.state_dict(), workdir / "model.pt")
         grad_norm = self.grad_norm_fn()
