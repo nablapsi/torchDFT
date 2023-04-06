@@ -604,6 +604,7 @@ class NDVNConvLogPolarizedNet(Functional):
 
     def __init__(
         self,
+        layers: List[int],
         N: int = 6,
         minN: float = -3.0,
         maxN: float = 0.0,
@@ -615,17 +616,18 @@ class NDVNConvLogPolarizedNet(Functional):
         self.sign = -1 if negative_transform else 1
         self.N = N
         self.register_buffer("alpha", torch.logspace(minN, maxN, self.N))
+        _layers = layers + [1]
+        self.mlp = nn.Sequential(nn.Linear(2 * self.N + 2, _layers[0]))
+        for i, l in enumerate(_layers[:-1]):
+            self.mlp.append(nn.SiLU())
+            self.mlp.append(nn.Linear(l, _layers[i + 1]))
+        self.mlp.append(nn.Softplus())
 
-        self.mlp = nn.Sequential(
-            nn.Linear(2 * self.N + 2, 60),
-            nn.SiLU(),
-            nn.Linear(60, 60),
-            nn.SiLU(),
-            nn.Linear(60, 60),
-            nn.SiLU(),
-            nn.Linear(60, 1),
-            nn.Softplus(),
-        )
+        for name, param in self.mlp.named_parameters():
+            if "weight" in name:
+                nn.init.kaiming_normal_(param, mode="fan_in", nonlinearity="relu")
+            if "bias" in name:
+                nn.init.zeros_(param)
 
     def convolution(self, den: Density, alpha: Tensor) -> Tensor:
         n = torch.stack((den.nu, den.nd), dim=1)
