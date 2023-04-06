@@ -639,7 +639,7 @@ class NDVNConvLogPolarizedNet(Functional):
         lognu = (den.nu + 1e-4).log()
         lognd = (den.nd + 1e-4).log()
         glob = (self.convolution(den, self.alpha) + 1e-4).log()
-        x = torch.cat(
+        x1 = torch.cat(
             (
                 lognu[..., None],
                 lognd[..., None],
@@ -648,7 +648,17 @@ class NDVNConvLogPolarizedNet(Functional):
             ),
             -1,
         )
-        x = self.mlp(x)
+        x2 = torch.cat(
+            (
+                lognd[..., None],
+                lognu[..., None],
+                glob[:, 1, ...],
+                glob[:, 0, ...],
+            ),
+            -1,
+        )
+        x = torch.stack((x1, x2), dim=1)
+        x = self.mlp(x).mean(1)
         return self.sign * x.squeeze(-1)
 
 
