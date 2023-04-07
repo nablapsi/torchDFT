@@ -33,7 +33,7 @@ class SCFSolution:
 
 
 class DensityMixer:
-    """Generic class for density mixers"""
+    """Generic class for density mixers."""
 
     @abstractmethod
     def step(self, P: Tensor, err: Tensor) -> Tensor:
@@ -421,6 +421,8 @@ class DIIS(DensityMixer):
 
 
 class LinearMixer(DensityMixer):
+    """Linear density mixer."""
+
     def __init__(self, alpha: float = 0.5, alpha_decay: float = 1.0):
         self.alpha = alpha
         self.alpha_decay = alpha_decay

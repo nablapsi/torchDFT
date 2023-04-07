@@ -58,7 +58,6 @@ class TestTrainScf:
     basis = GridBasis(system, grid, reflection_symmetry=True)
 
     def test_train_scf_linear(self):
-
         for xc_nn in self.models:
             task = SCFTrainingTask(
                 xc_nn,
@@ -74,7 +73,6 @@ class TestTrainScf:
         shutil.rmtree("run")
 
     def test_train_scf_pulay(self):
-
         for xc_nn in self.models:
             task = SCFTrainingTask(
                 xc_nn,
@@ -90,7 +88,6 @@ class TestTrainScf:
         shutil.rmtree("run")
 
     def test_train_scf_pulay_adam(self):
-
         for xc_nn in self.models:
             task = SCFTrainingTask(
                 xc_nn,
