@@ -92,7 +92,7 @@ class GridBasis(Basis):
         if functional.requires_grad:
             density.grad = self.get_density_gradient(P)
         if self.non_interacting:
-            V_H = P.new_zeros(1)
+            V_H = P.new_zeros(P.shape)
         else:
             V_H = (
                 get_hartree_potential(
