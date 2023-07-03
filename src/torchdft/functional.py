@@ -31,7 +31,7 @@ class ComposedFunctional(Functional):
         self.functionals = nn.ModuleList(functionals)
         self.factors = factors if factors is not None else [1] * len(functionals)
         self.requires_grad = any(functional.requires_grad for functional in functionals)
-        self.per_electron = all([functional.per_electron for functional in functionals])
+        self.per_electron = all(functional.per_electron for functional in functionals)
 
     def forward(self, density: Density) -> Tensor:
         eps = density.value.new_zeros(density.density.shape)
