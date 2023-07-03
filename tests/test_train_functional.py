@@ -8,7 +8,12 @@ from torchdft.gridbasis import GridBasis
 from torchdft.nn_functionals import Conv1dFunctionalNet, GlobalFunctionalNet
 from torchdft.radialbasis import RadialBasis
 from torchdft.scf import RKS
-from torchdft.trainingtask import GradientTrainingTask, SCFData, SCFTrainingTask
+from torchdft.trainingtask import (
+    GradientTrainingTask,
+    GradientTrainingTaskBasis,
+    SCFData,
+    SCFTrainingTask,
+)
 from torchdft.utils import System, SystemBatch, exp_coulomb
 from torchdft.xc_functionals import Lda1d, LdaPw92
 
@@ -141,6 +146,46 @@ class TestTrainScf:
                 ),
                 validation_step=1,
             )
+        shutil.rmtree("run")
+
+
+class TestTrainGrad:
+    torch.manual_seed(208934078)
+    Z = torch.tensor([[1, 0, 1], [1, 1, 1]])
+    centers = torch.tensor([[-1, 0, 1], [-1, 0, 1]])
+    system_list = [System(Z=Zi, centers=ci) for (Zi, ci) in zip(Z, centers)]
+    system = SystemBatch(system_list)
+    grid = Uniform1DGrid(end=10, dx=0.5, reflection_symmetry=True)
+    E_truth = torch.rand(Z.shape[0])
+    D_truth = torch.rand((Z.shape[0], grid.nodes.shape[0], grid.nodes.shape[0]))
+    C_truth = torch.rand((Z.shape[0], 1, grid.nodes.shape[0], grid.nodes.shape[0]))
+
+    model = Conv1dFunctionalNet(
+        window_size=1, channels=[1, 16, 1], negative_transform=True
+    )
+
+    def test_train_gradient(self):
+        basis = GridBasis(self.system, self.grid)
+        task = GradientTrainingTask(
+            self.model,
+            basis,
+            self.system.occ("OF,RKS"),
+            SCFData(self.E_truth, self.D_truth, self.C_truth),
+            RKS,
+        )
+        task.fit("run/test", device="cpu", minibatchsize=2, with_adam=True)
+        shutil.rmtree("run")
+
+    def test_train_gradient_basis(self):
+        basis = GridBasis(self.system, self.grid)
+        task = GradientTrainingTaskBasis(
+            self.model,
+            basis,
+            self.system.occ("OF,RKS"),
+            SCFData(self.E_truth, self.D_truth, self.C_truth),
+            RKS,
+        )
+        task.fit("run/test", device="cpu", minibatchsize=2)
         shutil.rmtree("run")
 
 

@@ -2,7 +2,7 @@ import torch
 from torch.testing import assert_allclose
 
 from torchdft.density import Density
-from torchdft.grid import RadialGrid, Uniform1DGrid
+from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import GridBasis, get_hartree_potential
 from torchdft.nn_functionals import (
     Conv1dFunctionalNet,
@@ -10,12 +10,20 @@ from torchdft.nn_functionals import (
     GgaConv1dFunctionalNet,
     GlobalConvolutionalLayer,
     GlobalFunctionalNet,
+    LDANet,
     NDVConvNet,
     NDVNConvLogNet,
+    NDVNConvLogPolarizedNet,
     NDVNConvNet,
     NDVNConvNetAlpha,
+    NDVNConvNetAlphaGrid,
+    NDVNConvNetGrid,
+    NDVNConvNetLogGrid,
     NDVNet,
+    PolarizedLDANet,
     SigLayer,
+    TrainableGGA,
+    TrainableLDA,
 )
 from torchdft.utils import System, exp_coulomb, gaussian
 
@@ -165,8 +173,7 @@ class TestGgaConv1dFunctionalNet:
 
 
 class TestRadialGlobalFunctionalNet:
-    grid = RadialGrid(end=10, dx=1e0)
-    density = Density(gaussian(grid.nodes, 0, 1), grid.nodes, grid.grid_weights)
+    density = Density(torch.rand((3, 10)), torch.rand(10), torch.rand(10))
 
     def test_NDVNet(self):
         net = NDVNet()
@@ -187,3 +194,50 @@ class TestRadialGlobalFunctionalNet:
     def test_NDVNConvNetAlpha(self):
         net = NDVNConvNetAlpha()
         _ = net(self.density)
+
+
+class TestPolarizedNets:
+    density = Density(torch.rand((3, 10)), torch.rand(10), torch.rand(10))
+
+    def test_NDVNConvLogPolarizedNet(self):
+        net = NDVNConvLogPolarizedNet(layers=[2, 2, 2])
+        _ = net(self.density)
+
+    def test_PolarizedLDANet(self):
+        net = PolarizedLDANet()
+        _ = net(self.density)
+
+
+class TestTrainableLDA:
+    net = TrainableLDA()
+    density = Density(torch.rand((3, 10)), torch.rand(10), torch.rand(10))
+    _ = net(density)
+
+
+class TestTrainableGGA:
+    net = TrainableGGA()
+    density = Density(torch.rand((3, 10)), torch.rand(10), torch.rand(10))
+    density.grad = torch.rand((3, 10))
+    _ = net(density)
+
+
+class TestGridFunctionals:
+    density = Density(torch.rand((3, 10)), torch.rand(10), torch.rand(10))
+
+    def test_NDVNConvNet(self):
+        net = NDVNConvNetGrid()
+        _ = net(self.density)
+
+    def test_NDVNConvNetAlphaGrid(self):
+        net = NDVNConvNetAlphaGrid()
+        _ = net(self.density)
+
+    def test_NDVNConvNetLogGrid(self):
+        net = NDVNConvNetLogGrid()
+        _ = net(self.density)
+
+
+class TestLDANet:
+    net = LDANet()
+    density = Density(torch.rand((3, 10)), torch.rand(10), torch.rand(10))
+    _ = net(density)
