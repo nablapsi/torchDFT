@@ -1,7 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-from typing import Callable, Dict, Tuple, Union
+from functools import partial
+from typing import Any, Callable, Dict, Tuple, Union
 
 import torch
 from torch import Tensor
@@ -10,64 +11,65 @@ from .basis import Basis
 from .density import Density
 from .errors import NanError
 from .functional import Functional
+from .grid import Grid
 from .utils import System, SystemBatch, exp_coulomb, fin_diff_matrix, get_dx
 
 
 class GridBasis(Basis):
     """Basis of equidistant 1D grid."""
 
-    S: Tensor
-    T: Tensor
-    V_ext: Tensor
-    dx: Tensor
-    grid: Tensor
-    E_nuc: Tensor
     centers: Tensor
     Z: Tensor
 
     def __init__(
         self,
         system: Union[System, SystemBatch],
+        grid: Grid,
         interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
+        non_interacting: bool = False,
+        reflection_symmetry: bool = False,
+        **interaction_fn_kwargs: Any,
     ):
         super().__init__()
+        self.non_interacting = non_interacting
+        self.reflection_symmetry = reflection_symmetry
         self.system = system
-        self.interaction_fn = interaction_fn
-        self.register_buffer("grid", self.system.grid)
-        self.register_buffer("dx", get_dx(self.grid))
+        self.interaction_fn = partial(interaction_fn, **interaction_fn_kwargs)
+        self.register_buffer("grid", grid.nodes)
+        self.register_buffer("grid_weights", grid.grid_weights)
+        self.register_buffer("dv", grid.dv)
         self.register_buffer("centers", self.system.centers)
         self.register_buffer("Z", self.system.Z)
         self.register_buffer(
             "E_nuc",
             (
                 (system.Z[..., None, :] * system.Z[..., None])
-                * interaction_fn(
+                * self.interaction_fn(
                     system.centers[..., None, :] - system.centers[..., None]
                 )
             )
             .triu(diagonal=1)
             .sum((-2, -1)),
         )
-        self.register_buffer("T", self.dx * get_kinetic_matrix(self.grid))
+        self.register_buffer("T", -5e-1 * self.get_laplacian())
         self.register_buffer(
             "V_ext",
-            get_external_potential(
-                self.system.Z, self.system.centers, self.grid, self.interaction_fn
+            (
+                -(
+                    self.system.Z[..., None]
+                    * self.interaction_fn(self.grid - self.centers[..., None])
+                ).sum(-2)
             ).diag_embed(),
         )
-        self.register_buffer(
-            "S",
-            torch.full_like(
-                self.V_ext[..., 0], self.dx.item(), device=self.grid.device
-            ).diag_embed(),
-        )
+        self.register_buffer("S", self.grid.new_ones(self.grid.size()).diag_embed())
         self.register_buffer(
             "grad_operator",
-            fin_diff_matrix(self.grid.shape[0], 5, 1, dtype=self.grid.dtype) / self.dx,
+            fin_diff_matrix(self.grid.shape[0], 5, 1, dtype=self.grid.dtype)
+            / self.grid_weights,
         )
 
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
-        return self.S, self.T, self.dx * self.V_ext
+        return self.S, self.T, self.V_ext
 
     def get_int_integrals(
         self,
@@ -86,93 +88,85 @@ class GridBasis(Basis):
         """
         if not P.requires_grad:
             P = P.detach().requires_grad_()
-        density = Density(self.density(P))
+        density = Density(self.density(P), self.grid, self.grid_weights)
         if functional.requires_grad:
-            density.grad = self._get_density_gradient(density.value)
-
-        v_H = get_hartree_potential(density.value, self.grid, self.interaction_fn)
-        E_func, v_func = get_functional_energy_potential(
-            density, self.grid, functional, create_graph
+            density.grad = self.get_density_gradient(P)
+        if self.non_interacting:
+            V_H = P.new_zeros(P.shape)
+        else:
+            V_H = (
+                get_hartree_potential(
+                    density.value,
+                    self.grid,
+                    self.interaction_fn,
+                )
+            ).diag_embed()
+        eps_func = functional(density)
+        if functional.per_electron:
+            eps_func = eps_func * density.density
+        E_func = (eps_func * self.grid_weights).sum(-1)
+        (v_func,) = torch.autograd.grad(
+            eps_func.sum(), density.value, create_graph=create_graph
         )
-        return self.dx * v_H.diag_embed(), self.dx * v_func.diag_embed(), E_func
+        if torch.any(torch.isnan(v_func)):
+            raise NanError()
+        V_func = v_func.diag_embed()
+        if len(P.shape) == 4:  # spin polarized
+            V_H = V_H.sum(1)
+        if not create_graph:
+            E_func = E_func.detach()
+            V_func = V_func.detach()
+            V_H = V_H.detach()
+        return V_H, V_func, E_func
 
-    def _get_density_gradient(self, density: Tensor) -> Tensor:
+    def get_density_gradient(self, P: Tensor) -> Tensor:
+        density = self.density(P)
         return torch.einsum("ij, ...j -> ...i", self.grad_operator, density)
 
+    def get_func_laplacian(self, C: Tensor) -> Tensor:
+        psi = self.get_psi(C)
+        return -2 * torch.einsum("...ij, ...j -> ...i", self.T, psi)
+
     def density_mse(self, density: Tensor) -> Tensor:
-        return density.pow(2).sum(dim=-1) * self.dx
+        return density.pow(2).sum(dim=-1) * self.grid_weights
 
     def density(self, P: Tensor) -> Tensor:
-        return P.diagonal(dim1=-2, dim2=-1)
-
-    def symmetrize_P(self, P: Tensor) -> Tensor:
-        return (P + P.flip(-1, -2)) / 2
+        if self.reflection_symmetry:
+            P = (P + P.flip(-1, -2)) / 2
+        return P.diagonal(dim1=-2, dim2=-1) / self.grid_weights
 
     def quadrupole(self, density: Tensor) -> Tensor:
-        Q_el = -(self.grid ** 2 * density).sum(-1) * self.dx
-        Q_nuc = (self.centers ** 2 * self.Z).sum(-1)
+        Q_el = -(self.grid**2 * density).sum(-1) * self.grid_weights
+        Q_nuc = (self.centers**2 * self.Z).sum(-1)
         return Q_el + Q_nuc
 
     def density_metrics_fn(
         self, density: Tensor, density_ref: Tensor
     ) -> Dict[str, Tensor]:
+        metrics = {}
         Q, Q_ref = (self.quadrupole(x).detach() for x in [density, density_ref])
-        return {"loss/quadrupole": ((Q - Q_ref) ** 2).mean().sqrt()}
+        metrics["quadrupole"] = ((Q - Q_ref) ** 2).sqrt()
+        return metrics
 
+    def get_laplacian(self) -> Tensor:
+        """Finite difference approximation of Laplacian operator."""
+        grid_dim = self.grid.size(0)
+        return (
+            (-2.5 * self.grid.new_ones([grid_dim]).diag_embed())
+            + (4.0 / 3.0 * self.grid.new_ones([grid_dim - 1]).diag_embed(offset=1))
+            + (4.0 / 3.0 * self.grid.new_ones([grid_dim - 1]).diag_embed(offset=-1))
+            + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=2))
+            + (-1.0 / 12.0 * self.grid.new_ones([grid_dim - 2]).diag_embed(offset=-2))
+        ) / self.grid_weights**2
 
-def get_laplacian(grid_dim: int, device: torch.device = None) -> Tensor:
-    """Finite difference approximation of Laplacian operator."""
-    return (
-        (-2.5 * torch.ones(grid_dim, device=device)).diag_embed()
-        + (4.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=1)
-        + (4.0 / 3.0 * torch.ones(grid_dim - 1, device=device)).diag_embed(offset=-1)
-        + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=2)
-        + (-1.0 / 12.0 * torch.ones(grid_dim - 2, device=device)).diag_embed(offset=-2)
-    )
-
-
-def get_kinetic_matrix(grid: Tensor) -> Tensor:
-    """Kinetic operator matrix."""
-    grid_dim = grid.size(0)
-    dx = get_dx(grid)
-    return -5e-1 * get_laplacian(grid_dim, device=grid.device) / (dx * dx)
-
-
-def get_hartree_energy(
-    density: Tensor, grid: Tensor, interaction_fn: Callable[[Tensor], Tensor]
-) -> Tensor:
-    r"""Evaluate Hartree energy.
-
-    Get Hartree energy evaluated as:
-    0.5 \int \int n(r) n(r') interaction_function(r, r') dr dr'
-
-    Args:
-        density: Float torch array of dimension (grid_dim,) holding the density
-          at each spatial point.
-        grid: Float torch array of dimension (grid_dim,).
-        interaction_fn: Function that, provided the displacements returns a float
-          torch array.
-
-    Returns:
-        Float. Hartree energy.
-    """
-
-    dx = get_dx(grid)
-
-    return (
-        5e-1
-        * (
-            density[..., None, :]
-            * density[..., None]
-            * interaction_fn(grid[:, None] - grid)
-        ).sum((-2, -1))
-        * dx
-        * dx
-    )
+    def get_psi(self, C: Tensor) -> Tensor:
+        return C / self.grid_weights.sqrt()
 
 
 def get_hartree_potential(
-    density: Tensor, grid: Tensor, interaction_fn: Callable[[Tensor], Tensor]
+    density: Tensor,
+    grid: Tensor,
+    interaction_fn: Callable[[Tensor], Tensor] = exp_coulomb,
 ) -> Tensor:
     r"""Evaluate Hartree potential.
 
@@ -192,91 +186,4 @@ def get_hartree_potential(
     """
 
     dx = get_dx(grid)
-
     return (density[..., None, :] * interaction_fn(grid[:, None] - grid)).sum(-1) * dx
-
-
-def get_external_potential_energy(
-    external_potential: Tensor, density: Tensor, grid: Tensor
-) -> Tensor:
-    r"""Evaluate external potential energy.
-
-    Get external potential energy evaluated as:
-    \int v_ext(r) n(r) dr
-
-    Args:
-        external_potential: Float torch array of dimension (grid_dim,)
-          holding the external potential at each grid point.
-        density: Float torch array of dimension (grid_dim,) holding the density
-          at each spatial point.
-        grid: Float torch array of dimension (grid_dim,).
-
-    Returns:
-        Float. External potential energy.
-    """
-
-    dx = get_dx(grid)
-    return (external_potential * density).sum(-1) * dx
-
-
-def get_external_potential(
-    charges: Tensor,
-    centers: Tensor,
-    grid: Tensor,
-    interaction_fn: Callable[[Tensor], Tensor],
-) -> Tensor:
-    r"""Evaluate external potential.
-
-    Get external potential evaluated as:
-    \sum_{n=1}^N - Z_n \cdot interaction_function(r, r')
-
-    Args:
-        charges: Float torch array of dimension (ncharges,) holding the charges
-          of each nucleus.
-        centers: Float torch array of dimension (ncharges,) holding the positions
-          of each nucleus.
-        grid: Float torch array of dimension (grid_dim,).
-        interaction_fn: Function that, provided the displacements returns a float
-          torch array.
-
-    Returns:
-        Float torch array of dimension (grid_dim,) holding the external potential
-          energy at each spatial point.
-    """
-
-    return -(charges[..., None] * interaction_fn(grid - centers[..., None])).sum(-2)
-
-
-def get_functional_energy(
-    density: Density, grid: Tensor, functional: Functional
-) -> Tensor:
-    """Evaluate functional energy."""
-    dx = get_dx(grid)
-    eps = functional(density)
-    if functional.per_electron:
-        eps = eps * density.value
-    return eps.sum(-1) * dx
-
-
-def get_functional_energy_potential(
-    density: Density,
-    grid: Tensor,
-    functional: Functional,
-    create_graph: bool = False,
-) -> Tuple[Tensor, Tensor]:
-    """Evaluate functional potential."""
-    density.value = torch.where(
-        density.value <= 0.0,
-        density.value.new_tensor(1e-100),
-        density.value,
-    )
-    dx = get_dx(grid)
-    E_func = get_functional_energy(density, grid, functional)
-    (v_func,) = torch.autograd.grad(
-        E_func.sum() / dx, density.value, create_graph=create_graph
-    )
-    if not create_graph:
-        E_func = E_func.detach()
-    if torch.any(torch.isnan(v_func)):
-        raise NanError()
-    return E_func, v_func

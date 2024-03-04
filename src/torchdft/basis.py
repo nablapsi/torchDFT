@@ -13,6 +13,12 @@ class Basis(nn.Module, ABC):
     """Base class representing an abstract basis."""
 
     E_nuc: Tensor
+    grid: Tensor
+    grid_weights: Tensor
+    S: Tensor
+    T: Tensor
+    V_ext: Tensor
+    dv: Tensor
 
     @abstractmethod
     def get_core_integrals(self) -> Tuple[Tensor, Tensor, Tensor]:
@@ -36,3 +42,26 @@ class Basis(nn.Module, ABC):
         self, density: Tensor, density_ref: Tensor
     ) -> Dict[str, Tensor]:
         return {}
+
+    @abstractmethod
+    def get_psi(self, C: Tensor) -> Tensor:
+        """
+        Evaluate orbital from basis coefficients.
+
+        c = <phi_i|psi> where phi is the basis function.
+        """
+        pass
+
+    @abstractmethod
+    def get_density_gradient(self, P: Tensor) -> Tensor:
+        pass
+
+    @abstractmethod
+    def get_func_laplacian(self, C: Tensor) -> Tensor:
+        """
+        Evaluate the laplacian of an orbital from the basis coefficients.
+
+        return sum_i c_i lap <x|phi_i> where where phi is the basis function.
+        """
+
+        pass

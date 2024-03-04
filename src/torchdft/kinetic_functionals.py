@@ -23,14 +23,14 @@ class ThomasFermi1D(Functional):
         E = c_k * \int n**3 dx
     """
 
-    def __init__(self, c: float = math.pi ** 2 / 24.0):
+    def __init__(self, c: float = math.pi**2 / 24.0):
         super().__init__()
         self.c = c
         self.requires_grad = False
         self.per_electron = False
 
     def forward(self, density: Density) -> Tensor:
-        return self.c * density.value ** 3
+        return self.c * density.value**3
 
 
 class VonWeizsaecker(Functional):
@@ -41,14 +41,22 @@ class VonWeizsaecker(Functional):
 
     def forward(self, density: Density) -> Tensor:
         assert density.grad is not None
-        return 1.0 / 8.0 * density.grad ** 2 / density.value
+        return 1.0 / 8.0 * density.grad**2 / density.value
 
 
 class ThomasFermi(Functional):
     """Evaluate the Thomas Fermi kinetic energy in 3D."""
 
     requires_grad: bool = False
-    per_electron = False
+    per_electron = True
 
     def forward(self, density: Density) -> Tensor:
-        return (3 / 10) * (3 * math.pi ** 2) ** (2 / 3) * density.value ** (5 / 3)
+        n = density.nu + density.nd
+        zeta = (density.nu - density.nd) / n
+        rs = (3 / (4 * math.pi * n)) ** (1 / 3)
+        return (
+            (3 / (10 * rs**2))
+            * (9 * math.pi / 4) ** (2 / 3)
+            * ((1 + zeta) ** (5 / 3) + (1 - zeta) ** (5 / 3))
+            * 5e-1
+        )

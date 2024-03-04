@@ -3,6 +3,7 @@ from torch.testing import assert_allclose
 
 from torchdft.density import Density
 from torchdft.functional import ComposedFunctional
+from torchdft.grid import Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.kinetic_functionals import VonWeizsaecker
 from torchdft.utils import System, gaussian
@@ -10,13 +11,17 @@ from torchdft.xc_functionals import Lda1d
 
 
 class TestComposedFunctional:
-    grid = torch.arange(-10, 10, 0.1)
-    density = Density(gaussian(grid, 0, 1))
+    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
+    density = Density(gaussian(grid.nodes, 0, 1), grid.nodes, grid.grid_weights)
     # System and basis are declared in order to access basis._get_density_gradient
     # method.
-    system = System(centers=torch.tensor([0]), Z=torch.tensor([1]), grid=grid)
-    basis = GridBasis(system)
-    batched_density = Density(torch.stack([gaussian(grid, 0, 1), gaussian(grid, 1, 1)]))
+    system = System(centers=torch.tensor([0]), Z=torch.tensor([1]))
+    basis = GridBasis(system, grid)
+    batched_density = Density(
+        torch.stack([gaussian(grid.nodes, 0, 1), gaussian(grid.nodes, 1, 1)]),
+        grid.nodes,
+        grid.grid_weights,
+    )
 
     def test_composed_functional(self):
         composed_functional = ComposedFunctional(
@@ -25,7 +30,9 @@ class TestComposedFunctional:
         assert composed_functional.requires_grad
 
         if composed_functional.requires_grad:
-            self.density.grad = self.basis._get_density_gradient(self.density.value)
+            self.density.grad = self.basis.get_density_gradient(
+                self.density.value.diag_embed()
+            )
 
         epsilon_composed = composed_functional(self.density)
         epsilon1 = Lda1d()(self.density) * self.density.value
@@ -41,7 +48,9 @@ class TestComposedFunctional:
         assert composed_functional.requires_grad
 
         if composed_functional.requires_grad:
-            self.density.grad = self.basis._get_density_gradient(self.density.value)
+            self.density.grad = self.basis.get_density_gradient(
+                self.density.value.diag_embed()
+            )
 
         epsilon_composed = composed_functional(self.density)
         epsilon1 = Lda1d()(self.density) * self.density.value
@@ -57,8 +66,8 @@ class TestComposedFunctional:
         assert composed_functional.requires_grad
 
         if composed_functional.requires_grad:
-            self.batched_density.grad = self.basis._get_density_gradient(
-                self.batched_density.value
+            self.batched_density.grad = self.basis.get_density_gradient(
+                self.batched_density.value.diag_embed()
             )
 
         epsilon_composed = composed_functional(self.batched_density)

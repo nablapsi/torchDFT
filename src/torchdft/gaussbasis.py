@@ -32,12 +32,10 @@ def _quadrupole(r: Tensor) -> Tensor:
 class GaussianBasis(Basis):
     """Gaussian basis with radial grids from PySCF."""
 
-    S: Tensor
-    T: Tensor
-    V_ext: Tensor
     phi: Tensor
     grid_coords: Tensor
     grid_weights: Tensor
+    dv: Tensor
     atom_coords: Tensor
     atom_charges: Tensor
     mask: Optional[Tensor]
@@ -46,13 +44,14 @@ class GaussianBasis(Basis):
         return _bapply(lambda m: fnp(m.intor(key)), self.mol)
 
     def __init__(self, mol: Union[Mole, Iterable[Mole]], **kwargs: object):
-        mol = mol if isinstance(mol, Mole) else list(mol)
+        mol = [mol] if isinstance(mol, Mole) else list(mol)
         super().__init__()
-        self.mol = mol
+        self.mol = [mol] if isinstance(mol, Mole) else list(mol)
         self.register_buffer("S", self._intor("int1e_ovlp"))
         self.register_buffer("T", self._intor("int1e_kin"))
         self.register_buffer("V_ext", self._intor("int1e_nuc"))
         self.register_buffer("eri", self._intor("int2e"))
+        self.register_buffer("dv", self.T.new_ones(1))
         self.grid = _bapply(dft.gen_grid.Grids, self.mol)
         self.mask = None
 
@@ -67,12 +66,13 @@ class GaussianBasis(Basis):
         )
         self.register_buffer("grid_coords", _bapply(lambda g: fnp(g.coords), self.grid))
         phi = _bapply(
-            lambda m, g: fnp(dft.numint.eval_ao(m, g.coords, deriv=1)),
+            lambda m, g: fnp(dft.numint.eval_ao(m, g.coords, deriv=2)),
             self.mol,
             self.grid,
         )
         self.register_buffer("phi", phi[..., 0, :, :])
         self.register_buffer("grad_phi", phi[..., 1:4, :, :])
+        self.register_buffer("lap_phi", phi[..., [4, 7, 9], :, :])  # xx, yy, zz
         self.register_buffer(
             "E_nuc", _bapply(lambda m: torch.tensor(m.energy_nuc()), self.mol)
         )
@@ -102,11 +102,13 @@ class GaussianBasis(Basis):
     def density_metrics_fn(
         self, density: Tensor, density_ref: Tensor
     ) -> Dict[str, Tensor]:
+        metrics = {}
         Q, Q_ref = (
             torch.linalg.eigvalsh(self.quadrupole(x).detach())
             for x in [density, density_ref]
         )
-        return {"loss/quadrupole": ((Q - Q_ref) ** 2).mean().sqrt()}
+        metrics["quadrupole"] = ((Q - Q_ref) ** 2).sqrt()
+        return metrics
 
     def get_int_integrals(
         self,
@@ -117,21 +119,15 @@ class GaussianBasis(Basis):
         V_H = torch.einsum("...ijkl,...kl->...ij", self.eri, P)
         if not P.requires_grad:
             P = P.detach().requires_grad_()
-        density = Density(self.density(P))
+        density = Density(self.density(P), self.grid, self.grid_weights)
         if functional.requires_grad:
-            # P + P^t is needed in order for grad w.r.t. P to be symmetric
-            density.grad = (
-                (
-                    (self.phi @ (P + P.transpose(-1, -2)))[..., None, :, :]
-                    * self.grad_phi
-                )
-                .sum(dim=-1)
-                .norm(dim=-2)
-            )
+            density.grad = self.get_density_gradient(P)
         if self.mask is not None:
             E_func = torch.empty_like(density.value)
             density_tmp = Density(
                 density.value[self.mask],
+                self.grid,
+                self.grid_weights,
                 density.grad[self.mask] if density.grad is not None else None,
             )
             E_func[self.mask] = functional(density_tmp)
@@ -139,6 +135,8 @@ class GaussianBasis(Basis):
                 p.detach_()
             density_tmp = Density(
                 density.value[~self.mask],
+                self.grid,
+                self.grid_weights,
                 density.grad[~self.mask] if density.grad is not None else None,
             )
             E_func[~self.mask] = functional(density_tmp)
@@ -147,14 +145,38 @@ class GaussianBasis(Basis):
         else:
             E_func = functional(density)
         if functional.per_electron:
-            E_func = density.value * E_func
+            E_func = density.density * E_func
         E_func = (E_func * self.grid_weights).sum(dim=-1)
         (V_func,) = torch.autograd.grad(
             E_func, P, torch.ones_like(E_func), create_graph=create_graph
         )
+        if len(P.shape) == 4:  # spin polarized
+            V_H = V_H.sum(1)
         if not create_graph:
             E_func = E_func.detach()
+            V_func = V_func.detach()
+            V_H = V_H.detach()
         return V_H, V_func, E_func
 
     def density_mse(self, density: Tensor) -> Tensor:
-        return (density ** 2 * self.grid_weights).sum(dim=-1)
+        return (density**2 * self.grid_weights).sum(dim=-1)
+
+    def get_density_gradient(self, P: Tensor) -> Tensor:
+        # P + P^t is needed in order for grad w.r.t. P to be symmetric
+        return (
+            ((self.phi @ (P + P.transpose(-1, -2)))[..., None, :, :] * self.grad_phi)
+            .sum(dim=-1)
+            .norm(dim=-2)
+        )
+
+    def get_psi(self, C: Tensor) -> Tensor:
+        return (self.phi @ C).sum(-1)
+
+    def get_func_laplacian(self, C: Tensor) -> Tensor:
+        """Get laplacian of a function from expansion coefficients."""
+        # x: Coordinate index.
+        # g: Grid index.
+        # b: Basis index.
+        # n: Batch index.
+        # o: Orbital index.
+        return torch.einsum("xgb, n...ob-> n...og", self.lap_phi, C)

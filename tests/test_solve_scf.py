@@ -1,39 +1,42 @@
-from typing import List, Tuple
-
 import torch
-from pyscf import dft, gto
-from torch import Tensor
+from pyscf import dft, gto, scf
 from torch.testing import assert_allclose
 
 from torchdft.errors import SCFNotConvergedError
 from torchdft.gaussbasis import GaussianBasis
+from torchdft.grid import GridBatch, RadialGrid, Uniform1DGrid
 from torchdft.gridbasis import GridBasis
 from torchdft.radialbasis import RadialBasis
-from torchdft.scf import ks_iteration, solve_scf
-from torchdft.utils import GeneralizedDiagonalizer, System, SystemBatch
+from torchdft.scf import RKS, ROKS, UKS
+from torchdft.utils import System, SystemBatch
 from torchdft.xc_functionals import PBE, Lda1d, LdaPw92
+
+torch.set_default_dtype(torch.double)
 
 
 def test_h2():
     Z = torch.tensor([1, 1])
-    centers = torch.tensor([0.0, 1.401118437], dtype=torch.float64)
-    grid = torch.arange(-10, 10, 0.1, dtype=torch.float64)
-    H2 = System(Z=Z, centers=centers, grid=grid)
-    basis = GridBasis(H2)
-    density, energy = solve_scf(basis, H2.occ(), Lda1d())
-    assert_allclose(energy, -1.4046211)
+    centers = torch.tensor([-0.7005592185, 0.7005592185], dtype=torch.float64)
+    grid = Uniform1DGrid(start=-10, end=10, dx=0.1)
+    H2 = System(Z=Z, centers=centers)
+    basis = GridBasis(H2, grid, reflection_symmetry=True)
+    solver = RKS(basis, H2.occ("KS, RKS"), Lda1d())
+    sol = solver.solve()
+    assert_allclose(sol.E[0], -1.4045913)
 
 
 def test_ks_of():
     Z = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
-    grid = torch.arange(-10, 10, 0.1)
-    H2 = System(Z=Z, centers=centers, grid=grid)
-    basis = GridBasis(H2)
-    density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d())
-    density_of, energy_of = solve_scf(basis, H2.occ(mode="OF"), Lda1d())
-    assert_allclose(density_ks, density_of)
-    assert_allclose(energy_ks, energy_of)
+    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
+    H2 = System(Z=Z, centers=centers)
+    basis = GridBasis(H2, grid, reflection_symmetry=True)
+    solver = RKS(basis, H2.occ("KS, RKS"), Lda1d())
+    sol_ks = solver.solve()
+    solver = RKS(basis, H2.occ("OF, RKS"), Lda1d())
+    sol_of = solver.solve()
+    assert_allclose(sol_ks.P, sol_of.P)
+    assert_allclose(sol_ks.E, sol_of.E)
 
 
 def test_h2_gauss():
@@ -41,11 +44,12 @@ def test_h2_gauss():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "lda,pw"
-    occ = torch.tensor([2])
+    occ = torch.tensor([[2]])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy = solve_scf(basis, occ, LdaPw92(), mixer="pulay", use_xitorch=False)
-    assert_allclose(energy, energy_true)
+    solver = RKS(basis, occ, LdaPw92())
+    sol = solver.solve()
+    assert_allclose(sol.E[0], energy_true)
 
 
 def test_h2_gauss_pbe():
@@ -53,11 +57,12 @@ def test_h2_gauss_pbe():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "pbe"
-    occ = torch.tensor([2])
+    occ = torch.tensor([[2]])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy = solve_scf(basis, occ, PBE(), mixer="pulay")
-    assert_allclose(energy, energy_true)
+    solver = RKS(basis, occ, PBE())
+    sol = solver.solve(mixer="pulay", conv_tol={"n": 1e-9})
+    assert_allclose(sol.E[0], energy_true)
 
 
 def test_batched_ks_iteration():
@@ -68,7 +73,7 @@ def test_batched_ks_iteration():
         center = chain.mean()
         return chain - center
 
-    grid = torch.arange(-10, 10, 0.1)
+    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
     R_list = [1.401118437, 2.5, 4]
     systems, gridbasis = [], []
     # Genetate some H2 and H3 systems:
@@ -76,123 +81,81 @@ def test_batched_ks_iteration():
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=charges, centers=centers, grid=grid)
+        system = System(Z=charges, centers=centers)
         systems.append(system)
-        gridbasis.append(GridBasis(system))
+        gridbasis.append(GridBasis(system, grid))
 
     n = 3
     charges = torch.ones(n)
     for R in R_list:
         centers = get_chain(n, R)
-        system = System(Z=charges, centers=centers, grid=grid)
+        system = System(Z=charges, centers=centers, spin=1)
         systems.append(system)
-        gridbasis.append(GridBasis(system))
+        gridbasis.append(GridBasis(system, grid))
 
     # Get batched system and grids.
     systembatch = SystemBatch(systems)
-    batchgrid = GridBasis(systembatch)
+    batchgrid = GridBasis(systembatch, grid)
 
-    for mode in ["KS", "OF"]:
+    for mode in ["KS,RKS", "OF,RKS"]:
         # Make two KS iterations:
         P_list, E_list = [], []
         for i, basis in enumerate(gridbasis):
             occ = systems[i].occ(mode)
-            S, T, Vext = basis.get_core_integrals()
-            S = GeneralizedDiagonalizer(S)
-            F = T + Vext
-            P, E = ks_iteration(F, S.X, occ)
-
-            V_H, V_xc, E_xc = basis.get_int_integrals(P, Lda1d(), create_graph=False)
-            F = T + Vext + V_H + V_xc
-            P, E = ks_iteration(F, S.X, occ)
-
-            P_list.append(P)
-            E_list.append(E)
-
-        # Make two KS iterations with the batched version:
-        occ = systembatch.occ(mode)
-        Sb, T, Vext = batchgrid.get_core_integrals()
-        Sb = GeneralizedDiagonalizer(Sb)
-        F = T + Vext
-        P, E = ks_iteration(F, Sb.X, occ)
-
-        V_H, V_xc, E_xc = batchgrid.get_int_integrals(P, Lda1d(), create_graph=False)
-        F = T + Vext + V_H + V_xc
-        P, E = ks_iteration(F, Sb.X, occ)
-
-        for i in range(systembatch.nbatch):
-            assert_allclose(P_list[i], P[i])
-            assert_allclose(E_list[i], E[i])
-
-
-def test_batched_solve_scf():
-    def get_chain(n, R):
-        chain = torch.zeros(n)
-        for i in range(n):
-            chain[i] = i * R
-        center = chain.mean()
-        return chain - center
-
-    grid = torch.arange(-10, 10, 0.1)
-    R_list = [1.401118437, 2.5, 4]
-    systems, gridbasis = [], []
-    # Genetate some H2 and H3 systems:
-    n = 2
-    Z = torch.ones(n)
-    for R in R_list:
-        centers = get_chain(n, R)
-        system = System(Z=Z, centers=centers, grid=grid)
-        systems.append(system)
-        gridbasis.append(GridBasis(system))
-
-    n = 3
-    Z = torch.ones(n)
-    for R in R_list:
-        centers = get_chain(n, R)
-        system = System(Z=Z, centers=centers, grid=grid)
-        systems.append(system)
-        gridbasis.append(GridBasis(system))
-
-    # Get batched system and grids.
-    systembatch = SystemBatch(systems)
-    batchgrid = GridBasis(systembatch)
-
-    for mode in ["KS", "OF"]:
-        P_list, E_list = [], []
-        for i, basis in enumerate(gridbasis):
-            tape: List[Tuple[Tensor, Tensor]] = []
-            occ = systems[i].occ(mode)
+            solver = RKS(basis, occ, Lda1d())
             try:
-                solve_scf(basis, occ, Lda1d(), max_iterations=1, tape=tape)
-            except SCFNotConvergedError:
-                pass
-            P_list.append(tape[-1][0])
-            E_list.append(tape[-1][1])
+                sol = solver.solve(mixer="linear", max_iterations=2)
+                P_list.append(sol.P)
+                E_list.append(sol.E)
+            except SCFNotConvergedError as e:
+                P_list.append(e.sol.P)
+                E_list.append(e.sol.E)
 
         # Make two KS iterations with the batched version:
         occ = systembatch.occ(mode)
-        tape = []
+        solver = RKS(batchgrid, occ, Lda1d())
         try:
-            solve_scf(batchgrid, occ, Lda1d(), max_iterations=1, tape=tape)
-        except SCFNotConvergedError:
-            pass
+            sol = solver.solve(mixer="linear", max_iterations=2)
+            P = sol.P
+            E = sol.E
+        except SCFNotConvergedError as e:
+            P = e.sol.P
+            E = e.sol.E
         for i in range(systembatch.nbatch):
-            assert_allclose(P_list[i], tape[-1][0][i])
-            assert_allclose(E_list[i], tape[-1][1][i])
+            assert_allclose(P_list[i][0], P[i])
+            assert_allclose(E_list[i][0], E[i])
 
 
 def test_pulaydensity_ks_of():
     Z = torch.tensor([1.0, 1.0])
     centers = torch.tensor([0.0, 1.401118437])
-    grid = torch.arange(-10, 10, 0.1)
-    H2 = System(Z=Z, centers=centers, grid=grid)
-    basis = GridBasis(H2)
-    density_ks, energy_ks = solve_scf(basis, H2.occ(), Lda1d(), mixer="pulaydensity")
-    density_of, energy_of = solve_scf(
-        basis, H2.occ(mode="OF"), Lda1d(), mixer="pulaydensity"
+    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
+    H2 = System(Z=Z, centers=centers)
+    basis = GridBasis(H2, grid)
+    solver = RKS(basis, H2.occ("KS,RKS"), Lda1d())
+    sol_ks = solver.solve(mixer="pulaydensity", mixer_kwargs={"alpha": 0.5})
+    solver = RKS(basis, H2.occ("OF,RKS"), Lda1d())
+    sol_of = solver.solve(mixer="pulaydensity", mixer_kwargs={"alpha": 0.5})
+    assert_allclose(sol_ks.P, sol_of.P)
+    assert_allclose(sol_ks.E, sol_of.E)
+
+
+def test_pulaydensity_ks_of_noxitorch():
+    Z = torch.tensor([1.0, 1.0])
+    centers = torch.tensor([0.0, 1.401118437])
+    grid = Uniform1DGrid(end=10, dx=0.1, reflection_symmetry=True)
+    H2 = System(Z=Z, centers=centers)
+    basis = GridBasis(H2, grid)
+    solver = RKS(basis, H2.occ("KS,RKS"), Lda1d())
+    sol_ks = solver.solve(
+        use_xitorch=False, mixer="pulaydensity", mixer_kwargs={"alpha": 0.5}
     )
-    assert_allclose(density_ks, density_of)
-    assert_allclose(energy_ks, energy_of)
+    solver = RKS(basis, H2.occ("OF,RKS"), Lda1d())
+    sol_of = solver.solve(
+        use_xitorch=False, mixer="pulaydensity", mixer_kwargs={"alpha": 0.5}
+    )
+    assert_allclose(sol_ks.P, sol_of.P)
+    assert_allclose(sol_ks.E, sol_of.E)
 
 
 def test_pulaydensity_h2_gauss():
@@ -200,13 +163,29 @@ def test_pulaydensity_h2_gauss():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "lda,pw"
+    occ = torch.tensor([[2]])
+    energy_true = mf.kernel()
+    basis = GaussianBasis(mol)
+    solver = RKS(basis, occ, LdaPw92())
+    sol = solver.solve(
+        mixer="pulaydensity", use_xitorch=True, mixer_kwargs={"alpha": 0.5}
+    )
+    assert_allclose(sol.E[0], energy_true)
+
+
+def test_pulaydensity_h2_gauss_noxitorch():
+    mol = gto.M(atom="H 0 0 0; H 0 0 1.1", basis="cc-pvdz", verbose=3)
+    mf = dft.RKS(mol)
+    mf.init_guess = "1e"
+    mf.xc = "lda,pw"
     occ = torch.tensor([2])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    density, energy = solve_scf(
-        basis, occ, LdaPw92(), mixer="pulaydensity", use_xitorch=False
+    solver = RKS(basis, occ, LdaPw92())
+    sol = solver.solve(
+        mixer="pulaydensity", use_xitorch=False, mixer_kwargs={"alpha": 0.5}
     )
-    assert_allclose(energy, energy_true)
+    assert_allclose(sol.E[0], energy_true)
 
 
 def test_pulaydensity_h2_gauss_pbe():
@@ -214,74 +193,297 @@ def test_pulaydensity_h2_gauss_pbe():
     mf = dft.RKS(mol)
     mf.init_guess = "1e"
     mf.xc = "pbe"
+    occ = torch.tensor([[2]])
+    energy_true = mf.kernel()
+    basis = GaussianBasis(mol)
+    mixer_kwargs = {"precondition": False, "regularization": 0, "alpha": 0.5}
+    solver = RKS(
+        basis,
+        occ,
+        PBE(),
+    )
+    sol = solver.solve(
+        mixer="pulaydensity",
+        mixer_kwargs=mixer_kwargs,
+        use_xitorch=True,
+    )
+    assert_allclose(sol.E[0], energy_true)
+
+
+def test_pulaydensity_h2_gauss_pbe_noxitorch():
+    mol = gto.M(atom="H 0 0 0; H 0 0 1.1", basis="cc-pvdz", verbose=3)
+    mf = dft.RKS(mol)
+    mf.init_guess = "1e"
+    mf.xc = "pbe"
     occ = torch.tensor([2])
     energy_true = mf.kernel()
     basis = GaussianBasis(mol)
-    mixer_kwargs = {"precondition": False, "regularization": 0}
-    density, energy = solve_scf(
-        basis, occ, PBE(), mixer="pulaydensity", mixer_kwargs=mixer_kwargs
+    mixer_kwargs = {"precondition": False, "regularization": 0, "alpha": 0.5}
+    solver = RKS(
+        basis,
+        occ,
+        PBE(),
     )
-    assert_allclose(energy, energy_true)
+    sol = solver.solve(
+        mixer="pulaydensity",
+        mixer_kwargs=mixer_kwargs,
+        use_xitorch=False,
+    )
+    assert_allclose(sol.E[0], energy_true)
 
 
 def test_Li_radialbasis():
     # True Li energy
     mol = gto.M(atom="Li 0 0 0", basis="cc-pv5z", verbose=3, spin=1)
     basis = GaussianBasis(mol)
-    density, energy_truth = solve_scf(
-        basis, torch.tensor([2, 1]), LdaPw92(), mixer="pulay", density_threshold=1e-9
-    )
+    solver = RKS(basis, torch.tensor([[2, 1]]), LdaPw92())
+    sol_truth = solver.solve(mixer="pulay", conv_tol={"n": 1e-9})
+
     # RadialBasis Li energy
-    grid = torch.arange(1e-2, 10, 1e-2, dtype=torch.float64)
-    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid)
-    basis = RadialBasis(Li)
-    density, energy = solve_scf(
+    grid = RadialGrid(end=10, dx=1e-2)
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), spin=1)
+    basis = RadialBasis(Li, grid)
+    solver = RKS(
         basis,
-        Li.occ("aufbau"),
+        Li.occ("aufbau,RKS"),
         LdaPw92(),
+    )
+    sol = solver.solve(
         mixer="pulay",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
     )
-    assert_allclose(energy, energy_truth, atol=1.6e-3, rtol=1e-4)
+    assert_allclose(sol.E, sol_truth.E, atol=1.6e-3, rtol=1e-4)
+
+
+def test_Be_C_radialbasis_pulay():
+    grid = RadialGrid(end=10, dx=2e-2)
+    system = SystemBatch(
+        [
+            System(Z=torch.tensor([4]), centers=torch.tensor([0e0])),
+            System(Z=torch.tensor([6]), centers=torch.tensor([0e0])),
+        ]
+    )
+    basis = RadialBasis(system, grid)
+    solver = RKS(basis, system.occ("aufbau,RKS"), LdaPw92())
+    sol = solver.solve(mixer="pulay", conv_tol={"n": 1e-9}, extra_fock_channel=True)
+    assert_allclose(sol.E, torch.tensor([-14.4447894200, -37.4198234193]))
 
 
 def test_batched_radialbasis():
-    grid = torch.arange(1e-2, 10, 1e-2, dtype=torch.float64)
+    grid = RadialGrid(end=10.0, dx=1e0)
     # Li
-    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), grid=grid)
+    Li = System(Z=torch.tensor([3]), centers=torch.tensor([0]), spin=1)
     # C
-    C = System(Z=torch.tensor([6]), centers=torch.tensor([0]), grid=grid)
+    C = System(Z=torch.tensor([6]), centers=torch.tensor([0]))
     batch = SystemBatch([Li, C])
-    Libasis = RadialBasis(Li)
-    Cbasis = RadialBasis(C)
-    batchedbasis = RadialBasis(batch)
-    P_Li, E_Li = solve_scf(
+    Libasis = RadialBasis(Li, grid)
+    Cbasis = RadialBasis(C, grid)
+    batchedbasis = RadialBasis(batch, grid)
+    solver = RKS(
         Libasis,
-        Li.occ("aufbau"),
+        Li.occ("aufbau,RKS"),
         functional=LdaPw92(),
-        mixer="pulaydensity",
-        density_threshold=1e-9,
-        extra_fock_channel=True,
     )
-    P_C, E_C = solve_scf(
+    sol_Li = solver.solve(
+        mixer="pulaydensity",
+        conv_tol={"n": 1e-9},
+        extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
+    )
+    solver = RKS(
         Cbasis,
-        C.occ("aufbau"),
+        C.occ("aufbau,RKS"),
         functional=LdaPw92(),
-        mixer="pulaydensity",
-        density_threshold=1e-9,
-        extra_fock_channel=True,
     )
-    P, E = solve_scf(
-        batchedbasis,
-        batch.occ("aufbau"),
-        functional=LdaPw92(),
+    sol_C = solver.solve(
         mixer="pulaydensity",
-        density_threshold=1e-9,
+        conv_tol={"n": 1e-9},
         extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
+    )
+    solver = RKS(
+        batchedbasis,
+        batch.occ("aufbau,RKS"),
+        functional=LdaPw92(),
+    )
+    sol = solver.solve(
+        mixer="pulaydensity",
+        conv_tol={"n": 1e-9},
+        extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
     )
 
-    assert_allclose(E_Li, E[0])
-    assert_allclose(P_Li, P[0])
-    assert_allclose(E_C, E[1])
-    assert_allclose(P_C, P[1])
+    assert_allclose(sol_Li.E[0], sol.E[0])
+    assert_allclose(sol_Li.P[0], sol.P[0])
+    assert_allclose(sol_C.E[0], sol.E[1])
+    assert_allclose(sol_C.P[0], sol.P[1])
+
+
+def test_UKS_gaussbasis_C():
+    mol = gto.M(atom="C 0 0 0.74", basis="cc-pvdz", verbose=3, spin=2)
+    mf = dft.UKS(mol)
+    mf.xc = "lda,pw"
+    mf.init_guess = "1e"
+    E0 = mf.kernel()
+
+    basis = GaussianBasis(mol)
+    solver = UKS(
+        basis,
+        torch.from_numpy(scf.uhf.get_occ(mf)),
+        LdaPw92(),
+    )
+    sol = solver.solve(print_iterations=1, conv_tol={"n": 1e-6}, mixer="pulay")
+    assert_allclose(E0, sol.E[0])
+
+
+def test_UKS_gaussbasis_N():
+    mol = gto.M(atom="N 0 0 0.74", basis="cc-pvdz", verbose=3, spin=3)
+    mf = dft.UKS(mol)
+    mf.xc = "lda,pw"
+    mf.init_guess = "1e"
+    E0 = mf.kernel()
+
+    basis = GaussianBasis(mol)
+    solver = UKS(
+        basis,
+        torch.from_numpy(scf.uhf.get_occ(mf)),
+        LdaPw92(),
+    )
+    sol = solver.solve(
+        print_iterations=1,
+        conv_tol={"n": 1e-6},
+        mixer="pulay",
+    )
+    assert_allclose(E0, sol.E[0])
+
+
+def test_ROKS_gaussbasis_C():
+    mol = gto.M(atom="C 0 0 0.74", basis="cc-pvdz", verbose=3, spin=2)
+    mf = dft.ROKS(mol)
+    mf.xc = "lda,pw"
+    mf.init_guess = "1e"
+    E0 = mf.kernel()
+
+    basis = GaussianBasis(mol)
+    solver = ROKS(
+        basis,
+        torch.tensor([[[1, 1, 1, 1], [1, 1, 0, 0]]]),
+        LdaPw92(),
+    )
+    sol = solver.solve(print_iterations=1, conv_tol={"n": 1e-6}, mixer="pulay")
+    assert_allclose(E0, sol.E[0])
+
+
+def test_ROKS_gaussbasis_N():
+    mol = gto.M(atom="N 0 0 0.74", basis="cc-pvdz", verbose=3, spin=3)
+    mf = dft.ROKS(mol)
+    mf.xc = "lda,pw"
+    mf.init_guess = "1e"
+    E0 = mf.kernel()
+
+    basis = GaussianBasis(mol)
+    solver = ROKS(
+        basis,
+        torch.tensor([[[1, 1, 1, 1, 1], [1, 1, 0, 0, 0]]]),
+        LdaPw92(),
+    )
+    sol = solver.solve(
+        print_iterations=1,
+        conv_tol={"n": 1e-6},
+        mixer="pulay",
+    )
+    assert_allclose(E0, sol.E[0])
+
+
+def test_solve_batch_grid():
+    Z = 5
+    system = System(centers=torch.tensor([0]), Z=torch.tensor([Z]), spin=Z % 2)
+
+    # Grid 1
+    grid1 = RadialGrid(end=10, dx=2.5e-2)
+    basis = RadialBasis(system, grid1)
+    solver = RKS(
+        basis,
+        system.occ("aufbau,RKS"),
+        functional=LdaPw92(),
+    )
+    sol1 = solver.solve(
+        mixer="pulaydensity",
+        conv_tol={"n": 1e-9},
+        extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
+    )
+
+    # Grid 2
+    grid2 = RadialGrid(end=10, dx=2.5e-2)
+    basis = RadialBasis(system, grid2)
+    solver = RKS(
+        basis,
+        system.occ("aufbau,RKS"),
+        functional=LdaPw92(),
+    )
+    sol2 = solver.solve(
+        mixer="pulaydensity",
+        conv_tol={"n": 1e-9},
+        extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
+    )
+
+    # Batch grid
+    grid = GridBatch([grid1, grid2])
+    system = SystemBatch(
+        [
+            System(centers=torch.tensor([0]), Z=torch.tensor([Z]), spin=Z % 2),
+            System(centers=torch.tensor([0]), Z=torch.tensor([Z]), spin=Z % 2),
+        ]
+    )
+    basis = RadialBasis(system, grid)
+    solver = RKS(
+        basis,
+        system.occ("aufbau,RKS"),
+        functional=LdaPw92(),
+    )
+    sol = solver.solve(
+        mixer="pulaydensity",
+        conv_tol={"n": 1e-9},
+        extra_fock_channel=True,
+        mixer_kwargs={"alpha": 0.5},
+    )
+    assert_allclose(sol1.E[0], sol.E[0])
+    assert_allclose(sol2.E[0], sol.E[1])
+
+
+def test_B_N_radialbasis_pulay_UKS():
+    grid = RadialGrid(end=10, dx=2e-2)
+    system = SystemBatch(
+        [
+            System(Z=torch.tensor([3]), centers=torch.tensor([0e0]), spin=1),
+            System(Z=torch.tensor([5]), centers=torch.tensor([0e0]), spin=1),
+            System(Z=torch.tensor([7]), centers=torch.tensor([0e0]), spin=3),
+        ]
+    )
+    basis = RadialBasis(system, grid)
+    solver = UKS(basis, system.occ("aufbau,UKS"), LdaPw92())
+    sol = solver.solve(mixer="pulay", conv_tol={"n": 1e-9}, extra_fock_channel=True)
+    print(sol.E)
+    assert_allclose(
+        sol.E, torch.tensor([-7.3414279159, -24.3494437516, -54.1287927509])
+    )
+
+
+def test_B_N_radialbasis_pulay_ROKS():
+    grid = RadialGrid(end=10, dx=2e-2)
+    system = SystemBatch(
+        [
+            System(Z=torch.tensor([3]), centers=torch.tensor([0e0]), spin=1),
+            System(Z=torch.tensor([5]), centers=torch.tensor([0e0]), spin=1),
+            System(Z=torch.tensor([7]), centers=torch.tensor([0e0]), spin=3),
+        ]
+    )
+    basis = RadialBasis(system, grid)
+    solver = ROKS(basis, system.occ("aufbau,ROKS"), LdaPw92())
+    sol = solver.solve(mixer="pulay", conv_tol={"n": 1e-9}, extra_fock_channel=True)
+    assert_allclose(
+        sol.E, torch.tensor([-7.3414217792, -24.3492748850, -54.1272344935])
+    )

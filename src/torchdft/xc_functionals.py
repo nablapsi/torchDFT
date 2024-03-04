@@ -39,11 +39,11 @@ class Lda1d(Functional):
         """
 
         density = density.value
-        y = density * math.pi / kappa
+        y = density * torch.pi / kappa
         return torch.where(
             density > thres,
-            (A / (2.0 * math.pi)) * (torch.log(1.0 + y * y) / y - 2 * torch.arctan(y)),
-            (A / (2.0 * math.pi)) * (-y + y ** 3 / 6),
+            (A / (2.0 * torch.pi)) * (torch.log(1.0 + y * y) / y - 2 * torch.arctan(y)),
+            (A / (2.0 * torch.pi)) * (-y + y**3 / 6),
         )
 
     def get_exponential_coulomb_LDAC_energy_density(
@@ -54,7 +54,7 @@ class Lda1d(Functional):
         Evaluate exchange potential.
         """
         density = density.value
-        y = density * math.pi / kappa
+        y = density * torch.pi / kappa
         alpha = 2.0
         beta = -1.00077
         gamma = 6.26099
@@ -67,18 +67,18 @@ class Lda1d(Functional):
         out = (
             -A
             * finite_y
-            / math.pi
+            / torch.pi
             / (
                 alpha
                 + beta * torch.sqrt(finite_y)
                 + gamma * finite_y
-                + delta * finite_y ** 1.5
-                + eta * finite_y ** 2
-                + sigma * finite_y ** 2.5
-                + nu * math.pi * kappa ** 2 / A * finite_y ** 3
+                + delta * finite_y**1.5
+                + eta * finite_y**2
+                + sigma * finite_y**2.5
+                + nu * torch.pi * kappa**2 / A * finite_y**3
             )
         )
-        return torch.where(y == 0.0, -A * y / math.pi / alpha, out)
+        return torch.where(y == 0.0, -A * y / torch.pi / alpha, out)
 
 
 class LdaPw92(Functional):
@@ -87,21 +87,32 @@ class LdaPw92(Functional):
     requires_grad = False
 
     def forward(self, density: Density) -> Tensor:
-        eps_x, eps_c, *_ = _lda_pw92(density.value)
+        eps_x, eps_c, *_ = _lda_pw92(density.nu, density.nd)
         return eps_x + eps_c
 
 
-def _lda_pw92(density: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
+def _lda_pw92(nu: Tensor, nd: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
     def Gamma(
         A: float, a1: float, b1: float, b2: float, b3: float, b4: float, p: int
     ) -> Tensor:
         poly = b1 * rs ** (1 / 2) + b2 * rs + b3 * rs ** (3 / 2) + b4 * rs ** (p + 1)
         return -2 * A * (1 + a1 * rs) * torch.log(1 + 1 / (2 * A * poly))
 
-    zeta = torch.tensor(0)
-    rs = (3 / (4 * math.pi * density)) ** (1 / 3)
-    kF = (3 * math.pi ** 2 * density) ** (1 / 3)
-    eps_x = -3 * kF / (4 * math.pi)
+    def lda(n: Tensor) -> Tensor:
+        kF = (3 * torch.pi**2 * n) ** (1 / 3)
+        return -3 * kF / (4 * torch.pi)
+
+    density = nu + nd
+    zeta = (nu - nd) / density
+    rs = (3 / (4 * torch.pi * density)) ** (1 / 3)
+    kF = (3 * torch.pi**2 * density) ** (1 / 3)
+    eps_x = (
+        -3
+        / (4 * torch.pi * rs)
+        * (9 * torch.pi / 4) ** (1 / 3)
+        * ((1 + zeta) ** (4 / 3) + (1 - zeta) ** (4 / 3))
+        / 2
+    )
     ff0 = 1.709921
     ff = ((1 + zeta) ** (4 / 3) + (1 - zeta) ** (4 / 3) - 2) / (2 ** (4 / 3) - 2)
     eps_c0 = Gamma(0.0310907, 0.21370, 7.5957, 3.5876, 1.6382, 0.49294, 1)
@@ -109,8 +120,8 @@ def _lda_pw92(density: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
     alpha_c = -Gamma(0.0168869, 0.11125, 10.357, 3.6231, 0.88026, 0.49671, 1)
     eps_c = (
         eps_c0
-        + alpha_c * ff / ff0 * (1 - zeta ** 4)
-        + (eps_c1 - eps_c0) * ff * zeta ** 4
+        + alpha_c * ff / ff0 * (1 - zeta**4)
+        + (eps_c1 - eps_c0) * ff * zeta**4
     )
     return eps_x, eps_c, kF, zeta
 
@@ -121,19 +132,19 @@ class PBE(Functional):
     requires_grad = True
 
     def forward(self, density: Density) -> Tensor:
-        eps_x, eps_c, kF, zeta = _lda_pw92(density.value)
-        s = density.grad / (2 * kF * density.value)
-        ks = torch.sqrt(4 * kF / math.pi)
+        eps_x, eps_c, kF, zeta = _lda_pw92(density.nu, density.nd)
+        s = density.grad / (2 * kF * density.density)
+        ks = torch.sqrt(4 * kF / torch.pi)
         phi = ((1 + zeta) ** (2 / 3) + (1 - zeta) ** (2 / 3)) / 2
-        t = density.grad / (2 * phi * ks * density.value)
+        t = density.grad / (2 * phi * ks * density.density)
         beta = 0.066725
         kappa = 0.804
-        mu = beta * (math.pi ** 2 / 3)
-        FX = 1 + kappa - kappa / (1 + mu * s ** 2 / kappa)
+        mu = beta * (torch.pi**2 / 3)
+        FX = 1 + kappa - kappa / (1 + mu * s**2 / kappa)
         eps_x = eps_x * FX
-        gamma = (1 - math.log(2)) / math.pi ** 2
-        A = beta / gamma * 1 / (torch.exp(-eps_c / (gamma * phi ** 3)) - 1 + 1e-30)
-        poly = t ** 2 * (1 + A * t ** 2) / (1 + A * t ** 2 + A ** 2 * t ** 4)
-        H = gamma * phi ** 3 * torch.log(1 + beta / gamma * poly)
+        gamma = (1 - math.log(2)) / torch.pi**2
+        A = beta / gamma * 1 / (torch.exp(-eps_c / (gamma * phi**3)) - 1 + 1e-30)
+        poly = t**2 * (1 + A * t**2) / (1 + A * t**2 + A**2 * t**4)
+        H = gamma * phi**3 * torch.log(1 + beta / gamma * poly)
         eps_c = eps_c + H
         return eps_x + eps_c
